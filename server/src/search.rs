@@ -55,7 +55,7 @@ pub enum SearchError {
     SearxError(String),
 }
 
-pub async fn perform_search(query: &str, searx_host: &str, searx_port: &str) -> Result<Vec<SearchResult>, SearchError> {
+pub async fn search(query: &str, searx_host: &str, searx_port: &str) -> Result<Vec<SearchResult>, SearchError> {
     if query.trim().is_empty() {
         return Ok(vec![]);
     }

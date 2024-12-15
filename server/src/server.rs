@@ -1,5 +1,5 @@
-use crate::handlers::search::search;
-use crate::handlers::agent_search::agent_search;
+use crate::handlers::search::handle_search;
+use crate::handlers::agent_search::handle_agent_search;
 use rocket::routes;
 
 pub struct ServerState {
@@ -14,7 +14,7 @@ pub fn create_server() -> rocket::Rocket<rocket::Build> {
     rocket::build()
         .manage(ServerState { searx_host, searx_port })
         .mount("/", routes![
-            search,
-            agent_search,
+            handle_search,
+            handle_agent_search,
         ])
 }

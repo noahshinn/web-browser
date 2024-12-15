@@ -1,6 +1,6 @@
-use regex::Regex;
-use crate::search::{SearchResult, perform_search, SearchError};
+use crate::search::{SearchResult, search, SearchError};
 use crate::llm::{CompletionBuilder, Message, Model, Provider, Role, LLMError};
+use crate::utils::{display_search_results_with_indices, parse_json_response};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use std::fmt::Display;
@@ -154,47 +154,6 @@ Respond with a JSON object in a markdown code block in the following format:
     )
 }
 
-#[derive(Error, Debug)]
-pub enum ParseMarkdownCodeBlockError {
-    #[error("No matching markdown code blocks found in response: {0}")]
-    NoMatchingMarkdownCodeBlocksFound(String),
-    #[error("Failed to parse JSON: {0}")]
-    ParseJsonError(#[from] serde_json::Error),
-}
-
-fn parse_markdown_code_block(content: &str, language: Option<&str>) -> Result<String, ParseMarkdownCodeBlockError> {
-    let re = Regex::new(r"```(\w*)\n([\s\S]*?)\n```").unwrap();
-    let mut valid_results = Vec::new();
-    for cap in re.captures_iter(content) {
-        let block_language = cap.get(1).map_or("", |m| m.as_str());
-        let parsed_content = cap.get(2).map_or("", |m| m.as_str()).trim();
-
-        if language.is_none() {
-            return Ok(parsed_content.to_string());
-        }
-        if block_language == language.unwrap() {
-            valid_results.push(parsed_content.to_string());
-        }
-    }
-    if valid_results.is_empty() {
-        return Err(ParseMarkdownCodeBlockError::NoMatchingMarkdownCodeBlocksFound(content.to_string()));
-    }
-    Ok(valid_results.last().unwrap().to_string())
-}
-
-fn display_content_preview(content: &str) -> String {
-    let preview = content.split_whitespace().take(100).collect::<Vec<_>>().join(" ");
-    format!("{}...", preview)
-}
-
-fn display_search_results_with_indices(results: &[SearchResult]) -> String {
-    results
-        .iter()
-        .enumerate()
-        .map(|(i, r)| format!("[{}] Title: {} ({})\nContent preview: {}", i, r.title, r.url, display_content_preview(&r.content)))
-        .collect::<Vec<_>>()
-        .join("\n\n")
-}
 
 async fn analyze_result(
     query: &str,
@@ -263,13 +222,9 @@ async fn select_next_result(
         Err(e) => return Err(AgentSearchError::SelectNextResultError(SelectNextResultError(e))),
     };
 
-    let json_string = match parse_markdown_code_block(&completion, Some("json")) {
-        Ok(json_string) => json_string,
-        Err(e) => return Err(AgentSearchError::SelectNextResultError(SelectNextResultError(LLMError::ParseError(format!("Failed to parse JSON: {}", e))))),
-    };
-    let decision: NextResultToVisit = match serde_json::from_str(&json_string) {
+    let decision: NextResultToVisit = match parse_json_response(&completion) {
         Ok(decision) => decision,
-        Err(e) => return Err(AgentSearchError::SelectNextResultError(SelectNextResultError(LLMError::ParseError(format!("Failed to parse JSON: {}", e))))),
+        Err(e) => return Err(AgentSearchError::SelectNextResultError(SelectNextResultError(LLMError::ParseError(e.to_string())))),
     };
     Ok(decision.index)
 }
@@ -301,19 +256,15 @@ async fn check_sufficient_findings_document(
         Err(e) => return Err(Box::new(e)),
     };
 
-    let json_string = match parse_markdown_code_block(&completion, Some("json")) {
-        Ok(json_string) => json_string,
-        Err(e) => return Err(Box::new(e)),
-    };
-    let decision: SufficientFindingsCheck = match serde_json::from_str(&json_string) {
+    let decision: SufficientFindingsCheck = match parse_json_response(&completion) {
         Ok(decision) => decision,
         Err(e) => return Err(Box::new(e)),
     };
     Ok(decision)
 }
 
-pub async fn perform_agent_search(query: &str, searx_host: &str, searx_port: &str) -> Result<AgentSearchResult, AgentSearchError> {
-    let search_result = match perform_search(query, searx_host, searx_port).await {
+pub async fn agent_search(query: &str, searx_host: &str, searx_port: &str) -> Result<AgentSearchResult, AgentSearchError> {
+    let search_result = match search(query, searx_host, searx_port).await {
         Ok(results) => results,
         Err(e) => return Err(AgentSearchError::SearchError(e)),
     };

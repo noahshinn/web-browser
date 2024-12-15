@@ -6,6 +6,7 @@ pub mod llm;
 pub mod server;
 pub mod search;
 pub mod agent_search;
+pub mod utils;
 
 #[rocket::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

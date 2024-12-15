@@ -2,7 +2,7 @@ use rocket::get;
 use rocket::serde::json::Json;
 use rocket::State;
 use crate::server::ServerState;
-use crate::agent_search::{AgentSearchResult, perform_agent_search};
+use crate::agent_search::{agent_search, AgentSearchResult};
 use crate::search::SearchQuery;
 use serde::{Serialize, Deserialize};
 
@@ -22,8 +22,8 @@ pub enum AgentSearchResponse {
 }
 
 #[get("/v1/agent_search?<query..>")]
-pub async fn agent_search(state: &State<ServerState>, query: SearchQuery) -> Json<AgentSearchResponse> {
-    let result = match perform_agent_search(&query.query, &state.searx_host, &state.searx_port).await {
+pub async fn handle_agent_search(state: &State<ServerState>, query: SearchQuery) -> Json<AgentSearchResponse> {
+    let result = match agent_search(&query.query, &state.searx_host, &state.searx_port).await {
         Ok(result) => AgentSearchResponse::Success {
             query: query.query,
             results: result,
