@@ -1,5 +1,6 @@
 use crate::handlers::search::search;
 use crate::handlers::agent_search::agent_search;
+use rocket::routes;
 
 pub struct ServerState {
     pub searx_host: String,

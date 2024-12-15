@@ -1,5 +1,6 @@
 use thiserror::Error;
 use serde::{Deserialize, Serialize};
+use rocket::form::FromForm;
 
 #[derive(FromForm, Deserialize, Debug, Clone)]
 pub struct SearchQuery {
@@ -22,14 +23,14 @@ impl std::fmt::Display for SearchResult {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SearxSearchResult {
-    pub category: String,
+    pub category: Option<String>,
     pub content: String,
-    pub engine: String,
-    pub engines: Vec<String>,
-    pub parsed_url: Vec<String>,
-    pub positions: Vec<i32>,
-    pub pretty_url: String,
-    pub score: f64,
+    pub engine: Option<String>,
+    pub engines: Option<Vec<String>>,
+    pub parsed_url: Option<Vec<String>>,
+    pub positions: Option<Vec<i32>>,
+    pub pretty_url: Option<String>,
+    pub score: Option<f64>,
     pub title: String,
     pub url: String,
 }

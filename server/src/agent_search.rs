@@ -116,7 +116,7 @@ Your task is to select the next unvisited search result to visit.
 
 ## Format
 Each unvisited search result will be labeled with an index.
-You must respond with a JSON object in the following format:
+You must respond with a JSON object in a markdown code block in the following format:
 ```json
 {{
     "index": <the index of the next unvisited search result to analyze>
@@ -145,7 +145,7 @@ Otherwise, return true.
 {WEB_SEARCH_CONTEXT}
 
 ## Format
-Respond with a JSON object in the following format:
+Respond with a JSON object in a markdown code block in the following format:
 ```json
 {{
     "sufficient": <true or false>
@@ -154,7 +154,15 @@ Respond with a JSON object in the following format:
     )
 }
 
-fn parse_markdown_code_block(content: &str, language: Option<&str>) -> String {
+#[derive(Error, Debug)]
+pub enum ParseMarkdownCodeBlockError {
+    #[error("No matching markdown code blocks found in response: {0}")]
+    NoMatchingMarkdownCodeBlocksFound(String),
+    #[error("Failed to parse JSON: {0}")]
+    ParseJsonError(#[from] serde_json::Error),
+}
+
+fn parse_markdown_code_block(content: &str, language: Option<&str>) -> Result<String, ParseMarkdownCodeBlockError> {
     let re = Regex::new(r"```(\w*)\n([\s\S]*?)\n```").unwrap();
     let mut valid_results = Vec::new();
     for cap in re.captures_iter(content) {
@@ -162,16 +170,16 @@ fn parse_markdown_code_block(content: &str, language: Option<&str>) -> String {
         let parsed_content = cap.get(2).map_or("", |m| m.as_str()).trim();
 
         if language.is_none() {
-            return parsed_content.to_string();
+            return Ok(parsed_content.to_string());
         }
         if block_language == language.unwrap() {
             valid_results.push(parsed_content.to_string());
         }
     }
     if valid_results.is_empty() {
-        panic!("No matching markdown code blocks found");
+        return Err(ParseMarkdownCodeBlockError::NoMatchingMarkdownCodeBlocksFound(content.to_string()));
     }
-    valid_results.last().unwrap().to_string()
+    Ok(valid_results.last().unwrap().to_string())
 }
 
 fn display_content_preview(content: &str) -> String {
@@ -204,8 +212,8 @@ async fn analyze_result(
         },
     ];
     let completion = match CompletionBuilder::new()
-        .model(Model::GPT4o)
-        .provider(Provider::OpenAI)
+        .model(Model::Claude35Sonnet)
+        .provider(Provider::Anthropic)
         .messages(prompt)
         .temperature(0.0)
         .build()
@@ -244,8 +252,8 @@ async fn select_next_result(
         },
     ];
     let completion = match CompletionBuilder::new()
-        .model(Model::GPT4o)
-        .provider(Provider::OpenAI)
+        .model(Model::Claude35Sonnet)
+        .provider(Provider::Anthropic)
         .messages(prompt)
         .temperature(0.0)
         .build()
@@ -255,7 +263,10 @@ async fn select_next_result(
         Err(e) => return Err(AgentSearchError::SelectNextResultError(SelectNextResultError(e))),
     };
 
-    let json_string = parse_markdown_code_block(&completion, Some("json"));
+    let json_string = match parse_markdown_code_block(&completion, Some("json")) {
+        Ok(json_string) => json_string,
+        Err(e) => return Err(AgentSearchError::SelectNextResultError(SelectNextResultError(LLMError::ParseError(format!("Failed to parse JSON: {}", e))))),
+    };
     let decision: NextResultToVisit = match serde_json::from_str(&json_string) {
         Ok(decision) => decision,
         Err(e) => return Err(AgentSearchError::SelectNextResultError(SelectNextResultError(LLMError::ParseError(format!("Failed to parse JSON: {}", e))))),
@@ -279,8 +290,8 @@ async fn check_sufficient_findings_document(
         },
     ];
     let completion = match CompletionBuilder::new()
-        .model(Model::GPT4o)
-        .provider(Provider::OpenAI)
+        .model(Model::Claude35Sonnet)
+        .provider(Provider::Anthropic)
         .messages(prompt)
         .temperature(0.0)
         .build()
@@ -290,8 +301,11 @@ async fn check_sufficient_findings_document(
         Err(e) => return Err(Box::new(e)),
     };
 
-    let json_string = parse_markdown_code_block(&completion, Some("json"));
-    let decision = match serde_json::from_str(&json_string) {
+    let json_string = match parse_markdown_code_block(&completion, Some("json")) {
+        Ok(json_string) => json_string,
+        Err(e) => return Err(Box::new(e)),
+    };
+    let decision: SufficientFindingsCheck = match serde_json::from_str(&json_string) {
         Ok(decision) => decision,
         Err(e) => return Err(Box::new(e)),
     };

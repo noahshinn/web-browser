@@ -142,7 +142,7 @@ impl CompletionBuilder {
         let options = CompletionOptions {
             temperature: self.temperature.unwrap_or(0.0),
             max_completion_tokens: self.max_completion_tokens.unwrap_or(0),
-            server_endpoint: self.server_endpoint.unwrap_or_default(),
+            server_endpoint: self.server_endpoint,
             custom_server_endpoint: self.custom_server_endpoint,
             custom_model: self.custom_model,
         };
@@ -161,7 +161,7 @@ impl CompletionBuilder {
 pub struct CompletionOptions {
     pub temperature: f64,
     pub max_completion_tokens: i32,
-    pub server_endpoint: String,
+    pub server_endpoint: Option<String>,
     pub custom_server_endpoint: Option<String>,
     pub custom_model: Option<String>,
 }
