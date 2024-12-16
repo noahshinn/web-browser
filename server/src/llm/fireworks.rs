@@ -1,4 +1,4 @@
-use crate::llm::{CompletionOptions, Message, Model, LLMError};
+use crate::llm::{CompletionOptions, LLMError, Message, Model};
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -40,16 +40,17 @@ pub async fn completion_fireworks(
         model: format!("{FIREWORKS_MODEL_ENDPOINT_PREFIX}/{model}"),
         messages: messages,
         temperature: options.and_then(|opt| (opt.temperature != 0.0).then_some(opt.temperature)),
-        max_tokens: options.and_then(|opt| {
-            (opt.max_completion_tokens != 0).then_some(opt.max_completion_tokens)
-        }),
+        max_tokens: options
+            .and_then(|opt| (opt.max_completion_tokens != 0).then_some(opt.max_completion_tokens)),
     };
 
     let api_key = match env::var("FIREWORKS_API_KEY") {
         Ok(key) => key,
-        Err(_) => return Err(LLMError::RequestBuildingError(
-            "FIREWORKS_API_KEY environment variable not set".to_string()
-        )),
+        Err(_) => {
+            return Err(LLMError::RequestBuildingError(
+                "FIREWORKS_API_KEY environment variable not set".to_string(),
+            ))
+        }
     };
 
     let mut headers = HeaderMap::new();
@@ -83,4 +84,4 @@ pub async fn completion_fireworks(
         .first()
         .map(|choice| choice.message.content.clone())
         .ok_or(LLMError::EmptyResponse)
-} 
+}

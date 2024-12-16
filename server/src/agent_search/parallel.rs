@@ -1,10 +1,12 @@
-use thiserror::Error;
+use crate::agent_search::{
+    visit_and_extract_relevant_info, AggregationPassError, VisitAndExtractRelevantInfoError,
+};
 use crate::agent_search::{AgentSearchResult, AnalysisDocument};
-use crate::search::SearchError;
-use crate::agent_search::{VisitAndExtractRelevantInfoError, AggregationPassError, visit_and_extract_relevant_info};
+use crate::prompts::{Prompt, AGGREGATE_WEB_SEARCH_FINDINGS_PROMPT};
 use crate::search::search;
-use crate::prompts::{AGGREGATE_WEB_SEARCH_FINDINGS_PROMPT, Prompt};
+use crate::search::SearchError;
 use futures::future::join_all;
+use thiserror::Error;
 use tokio::task;
 
 #[derive(Error, Debug)]
@@ -32,17 +34,17 @@ pub async fn parallel_agent_search(
         Ok(results) => results,
         Err(e) => return Err(ParallelAgentSearchError::SearchError(e)),
     };
-    let extraction_tasks = search_results.iter().map(|result| {
-        let query = query.to_string();
-        task::spawn(async move {
-            visit_and_extract_relevant_info(
-                query.as_str(),
-                "",
-                result,
-            ).await
+    let extraction_tasks = search_results
+        .iter()
+        .map(|result| {
+            let query = query.to_string();
+            task::spawn(
+                async move { visit_and_extract_relevant_info(query.as_str(), "", result).await },
+            )
         })
-    }).collect::<Vec<_>>();
-    let extraction_results = join_all(extraction_tasks).await
+        .collect::<Vec<_>>();
+    let extraction_results = join_all(extraction_tasks)
+        .await
         .into_iter()
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| ParallelAgentSearchError::VisitAndExtractRelevantInfoError(e))?
@@ -64,14 +66,16 @@ async fn aggregate_results(
     query: &str,
     extraction_results: Vec<ExtractionResult>,
 ) -> Result<String, AggregationPassError> {
-    let extraction_results_display = extraction_results.iter().map(|result| {
-        format!(
-            "## {} ({})\n\n{}",
-            result.search_result.title,
-            result.search_result.url,
-            result.content
-        )
-    }).collect::<Vec<_>>().join("\n\n");
+    let extraction_results_display = extraction_results
+        .iter()
+        .map(|result| {
+            format!(
+                "## {} ({})\n\n{}",
+                result.search_result.title, result.search_result.url, result.content
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n");
     let user_prompt = format!(
         r#"# Search query
 {query}
@@ -79,7 +83,10 @@ async fn aggregate_results(
 # Extracted information
 {extraction_results_display}"#
     );
-    let prompt = Prompt::new(AGGREGATE_WEB_SEARCH_FINDINGS_PROMPT.to_string(), user_prompt);
+    let prompt = Prompt::new(
+        AGGREGATE_WEB_SEARCH_FINDINGS_PROMPT.to_string(),
+        user_prompt,
+    );
     match prompt.send_message(query, extraction_results).await {
         Ok(response) => Ok(response),
         Err(e) => Err(AggregationPassError::LLMError(e)),

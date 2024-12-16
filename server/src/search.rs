@@ -1,6 +1,6 @@
-use thiserror::Error;
-use serde::{Deserialize, Serialize};
 use rocket::form::FromForm;
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 #[derive(FromForm, Deserialize, Debug, Clone)]
 pub struct SearchQuery {
@@ -16,10 +16,13 @@ pub struct SearchResult {
 
 impl std::fmt::Display for SearchResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "# Search result: {} ({})\n\n{}", self.title, self.url, self.content)
+        write!(
+            f,
+            "# Search result: {} ({})\n\n{}",
+            self.title, self.url, self.content
+        )
     }
 }
-
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SearxSearchResult {
@@ -55,7 +58,11 @@ pub enum SearchError {
     SearxError(String),
 }
 
-pub async fn search(query: &str, searx_host: &str, searx_port: &str) -> Result<Vec<SearchResult>, SearchError> {
+pub async fn search(
+    query: &str,
+    searx_host: &str,
+    searx_port: &str,
+) -> Result<Vec<SearchResult>, SearchError> {
     if query.trim().is_empty() {
         return Ok(vec![]);
     }
@@ -70,7 +77,7 @@ pub async fn search(query: &str, searx_host: &str, searx_port: &str) -> Result<V
             ("q", query),
             ("format", "json"),
             ("language", "en"),
-            ("engines", "google")
+            ("engines", "google"),
         ])
         .send()
         .await
@@ -85,7 +92,8 @@ pub async fn search(query: &str, searx_host: &str, searx_port: &str) -> Result<V
         .json::<SearxResponse>()
         .await
         .map_err(SearchError::RequestError)?;
-    Ok(searx_response.results
+    Ok(searx_response
+        .results
         .into_iter()
         .map(|result| SearchResult {
             title: result.title,

@@ -1,4 +1,4 @@
-use crate::llm::{CompletionOptions, Message, Model, LLMError};
+use crate::llm::{CompletionOptions, LLMError, Message, Model};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 
@@ -29,17 +29,27 @@ pub async fn completion_custom(
     options: Option<&CompletionOptions>,
 ) -> Result<String, LLMError> {
     let Some(options) = options else {
-        return Err(LLMError::RequestBuildingError("completion options not set".to_string()));
+        return Err(LLMError::RequestBuildingError(
+            "completion options not set".to_string(),
+        ));
     };
 
     let custom_endpoint = match &options.custom_server_endpoint {
         Some(endpoint) => endpoint,
-        None => return Err(LLMError::RequestBuildingError("custom server endpoint not set".to_string())),
+        None => {
+            return Err(LLMError::RequestBuildingError(
+                "custom server endpoint not set".to_string(),
+            ))
+        }
     };
 
     let custom_model = match &options.custom_model {
         Some(model) => model,
-        None => return Err(LLMError::RequestBuildingError("custom model not set".to_string())),
+        None => {
+            return Err(LLMError::RequestBuildingError(
+                "custom model not set".to_string(),
+            ))
+        }
     };
 
     let req_body = CustomRequest {
@@ -71,4 +81,4 @@ pub async fn completion_custom(
     };
 
     Ok(response_body.message.content)
-} 
+}

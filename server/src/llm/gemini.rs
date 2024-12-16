@@ -1,4 +1,4 @@
-use crate::llm::{CompletionOptions, Message, Model, Role, LLMError};
+use crate::llm::{CompletionOptions, LLMError, Message, Model, Role};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -71,7 +71,8 @@ pub(crate) async fn completion_gemini(
         match msg.role {
             Role::System => {
                 generation_config = Some(GeminiGenerationConfig {
-                    temperature: options.and_then(|opt| (opt.temperature != 0.0).then_some(opt.temperature)),
+                    temperature: options
+                        .and_then(|opt| (opt.temperature != 0.0).then_some(opt.temperature)),
                 });
                 system_content = Some(msg.content.clone());
             }
@@ -103,9 +104,11 @@ pub(crate) async fn completion_gemini(
 
     let api_key = match env::var("GOOGLE_API_KEY") {
         Ok(key) => key,
-        Err(_) => return Err(LLMError::RequestBuildingError(
-            "GOOGLE_API_KEY environment variable not set".to_string()
-        )),
+        Err(_) => {
+            return Err(LLMError::RequestBuildingError(
+                "GOOGLE_API_KEY environment variable not set".to_string(),
+            ))
+        }
     };
 
     let mut headers = HeaderMap::new();
@@ -136,4 +139,4 @@ pub(crate) async fn completion_gemini(
         .and_then(|candidate| candidate.content.parts.first())
         .map(|part| part.text.clone())
         .ok_or(LLMError::EmptyResponse)
-} 
+}

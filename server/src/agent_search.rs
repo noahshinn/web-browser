@@ -1,28 +1,35 @@
-use crate::search::SearchResult;
 use crate::llm::LLMError;
 use crate::llm::{CompletionBuilder, Model, Provider};
-use crate::prompts::{Prompt, build_analyze_result_system_prompt, WEB_SEARCH_USE_SAME_WEB_SEARCH_FINDINGS_DOCUMENT, build_sufficient_information_check_prompt};
-use crate::utils::{enforce_n_sequential_newlines, display_search_results_with_indices, parse_json_response};
+use crate::prompts::{
+    build_analyze_result_system_prompt, build_sufficient_information_check_prompt, Prompt,
+    WEB_SEARCH_USE_SAME_WEB_SEARCH_FINDINGS_DOCUMENT,
+};
+use crate::search::SearchResult;
+use crate::utils::{
+    display_search_results_with_indices, enforce_n_sequential_newlines, parse_json_response,
+};
 use rocket::{FromForm, FromFormField};
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 use std::fmt::Display;
+use thiserror::Error;
 
-use reqwest;
 use ammonia::Builder;
+use reqwest;
 use std::collections::HashSet;
 
 pub mod human;
-pub mod parallel;
-pub mod sequential;
-pub mod parallel_tree;
 pub mod multi_query_parallel_tree;
+pub mod parallel;
+pub mod parallel_tree;
+pub mod sequential;
 
 pub use human::{human_agent_search, HumanAgentSearchError};
+pub use multi_query_parallel_tree::{
+    multi_query_parallel_tree_agent_search, MultiQueryParallelTreeAgentSearchError,
+};
 pub use parallel::{parallel_agent_search, ParallelAgentSearchError};
-pub use sequential::{sequential_agent_search, SequentialAgentSearchError};
 pub use parallel_tree::{parallel_tree_agent_search, ParallelTreeAgentSearchError};
-pub use multi_query_parallel_tree::{multi_query_parallel_tree_agent_search, MultiQueryParallelTreeAgentSearchError};
+pub use sequential::{sequential_agent_search, SequentialAgentSearchError};
 
 #[derive(Deserialize, Debug, Clone, FromForm)]
 pub struct SearchQuery {
@@ -90,38 +97,36 @@ pub enum AgentSearchError {
 }
 
 pub async fn agent_search(
-    query: &SearchQuery, 
-    searx_host: &str, 
+    query: &SearchQuery,
+    searx_host: &str,
     searx_port: &str,
 ) -> Result<AgentSearchResult, AgentSearchError> {
     let strategy = query.strategy.clone().unwrap_or_default();
-    
+
     match strategy {
-        AgentSearchStrategy::Human => human_agent_search(
-            &query.query, 
-            searx_host, 
-            searx_port
-        ).await.map_err(AgentSearchError::HumanAgentSearchError),
-        AgentSearchStrategy::Parallel => parallel_agent_search(
-            &query.query,
-            searx_host,
-            searx_port
-        ).await.map_err(AgentSearchError::ParallelAgentSearchError),
-        AgentSearchStrategy::Sequential => sequential_agent_search(
-            &query.query,
-            searx_host,
-            searx_port
-        ).await.map_err(AgentSearchError::SequentialAgentSearchError),
-        AgentSearchStrategy::ParallelTree => parallel_tree_agent_search(
-            &query.query,
-            searx_host,
-            searx_port
-        ).await.map_err(AgentSearchError::ParallelTreeAgentSearchError),
-        AgentSearchStrategy::MultiQueryParallelTree => multi_query_parallel_tree_agent_search(
-            &query.query,
-            searx_host,
-            searx_port
-        ).await.map_err(AgentSearchError::MultiQueryParallelTreeAgentSearchError),
+        AgentSearchStrategy::Human => human_agent_search(&query.query, searx_host, searx_port)
+            .await
+            .map_err(AgentSearchError::HumanAgentSearchError),
+        AgentSearchStrategy::Parallel => {
+            parallel_agent_search(&query.query, searx_host, searx_port)
+                .await
+                .map_err(AgentSearchError::ParallelAgentSearchError)
+        }
+        AgentSearchStrategy::Sequential => {
+            sequential_agent_search(&query.query, searx_host, searx_port)
+                .await
+                .map_err(AgentSearchError::SequentialAgentSearchError)
+        }
+        AgentSearchStrategy::ParallelTree => {
+            parallel_tree_agent_search(&query.query, searx_host, searx_port)
+                .await
+                .map_err(AgentSearchError::ParallelTreeAgentSearchError)
+        }
+        AgentSearchStrategy::MultiQueryParallelTree => {
+            multi_query_parallel_tree_agent_search(&query.query, searx_host, searx_port)
+                .await
+                .map_err(AgentSearchError::MultiQueryParallelTreeAgentSearchError)
+        }
     }
 }
 
@@ -134,7 +139,10 @@ async fn visit_and_extract_relevant_info(
         Ok(parsed_webpage) => parsed_webpage,
         Err(e) => return Err(VisitAndExtractRelevantInfoError::WebpageParseError(e)),
     };
-    let user_prompt = format!("# Query:\n{}\n\n# Search result:\n## {} ({})\n\n{}\n\n# Current findings document:\n{}", query, result.title, result.url, parsed_webpage.content, current_analysis);
+    let user_prompt = format!(
+        "# Query:\n{}\n\n# Search result:\n## {} ({})\n\n{}\n\n# Current findings document:\n{}",
+        query, result.title, result.url, parsed_webpage.content, current_analysis
+    );
     let prompt = Prompt::new(build_analyze_result_system_prompt(), user_prompt);
     let completion = match CompletionBuilder::new()
         .model(Model::Claude35Sonnet)
@@ -185,9 +193,10 @@ pub async fn visit_and_parse_webpage(url: &str) -> Result<ParsedWebpage, Webpage
         Ok(response) => response,
         Err(e) => return Err(WebpageParseError::FetchError(e)),
     };
-    let webpage_text = response.text().await.map_err(|e| {
-        WebpageParseError::FetchError(e)
-    })?;
+    let webpage_text = response
+        .text()
+        .await
+        .map_err(|e| WebpageParseError::FetchError(e))?;
 
     let dom_text = dom_parse_webpage(&webpage_text)?;
     // let semantic_text = semantic_parse_webpage(&dom_text).await?;
@@ -245,15 +254,13 @@ fn dom_parse_webpage(webpage_text: &str) -> Result<ParsedWebpage, DomParseError>
     let clean_html = Builder::new()
         .rm_tags(BLACKLISTED_TAGS)
         .generic_attributes(HashSet::from_iter(WHITELISTED_ATTRIBUTES))
-        .attribute_filter(|element, attribute, value| {
-            match (element, attribute) {
-                ("div", "src") => None,
-                ("img", "src") => None,
-                ("img", "height") => None,
-                ("img", "width") => None,
-                ("a", "rel") => None,
-                _ => Some(value.into())
-            }
+        .attribute_filter(|element, attribute, value| match (element, attribute) {
+            ("div", "src") => None,
+            ("img", "src") => None,
+            ("img", "height") => None,
+            ("img", "width") => None,
+            ("a", "rel") => None,
+            _ => Some(value.into()),
         })
         .strip_comments(true)
         .clean(&webpage_text)
@@ -269,7 +276,6 @@ fn dom_parse_webpage(webpage_text: &str) -> Result<ParsedWebpage, DomParseError>
         content: clean_html,
     })
 }
-
 
 #[derive(Deserialize, Debug, Clone)]
 struct SufficientInformationCheck {
@@ -306,7 +312,11 @@ async fn check_sufficient_information(
     };
     let decision: SufficientInformationCheck = match parse_json_response(&completion) {
         Ok(decision) => decision,
-        Err(e) => return Err(SufficientInformationCheckError(LLMError::ParseError(e.to_string()))),
+        Err(e) => {
+            return Err(SufficientInformationCheckError(LLMError::ParseError(
+                e.to_string(),
+            )))
+        }
     };
     Ok(decision)
 }

@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use thiserror::Error;
-pub mod openai;
 pub mod anthropic;
 pub mod custom;
 pub mod fireworks;
 pub mod gemini;
+pub mod openai;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Role {
@@ -131,12 +131,20 @@ impl CompletionBuilder {
     pub async fn build(self) -> Result<String, LLMError> {
         let model = match self.model {
             Some(m) => m,
-            None => return Err(LLMError::RequestBuildingError("model is required".to_string())),
+            None => {
+                return Err(LLMError::RequestBuildingError(
+                    "model is required".to_string(),
+                ))
+            }
         };
 
         let provider = match self.provider {
             Some(p) => p,
-            None => return Err(LLMError::RequestBuildingError("provider is required".to_string())),
+            None => {
+                return Err(LLMError::RequestBuildingError(
+                    "provider is required".to_string(),
+                ))
+            }
         };
 
         let options = CompletionOptions {
@@ -148,11 +156,21 @@ impl CompletionBuilder {
         };
 
         match provider {
-            Provider::OpenAI => openai::completion_openai(model, &self.messages, Some(&options)).await,
-            Provider::Anthropic => anthropic::completion_anthropic(model, &self.messages, Some(&options)).await,
-            Provider::Google => gemini::completion_gemini(model, &self.messages, Some(&options)).await,
-            Provider::Fireworks => fireworks::completion_fireworks(model, &self.messages, Some(&options)).await,
-            Provider::Custom => custom::completion_custom(model, &self.messages, Some(&options)).await,
+            Provider::OpenAI => {
+                openai::completion_openai(model, &self.messages, Some(&options)).await
+            }
+            Provider::Anthropic => {
+                anthropic::completion_anthropic(model, &self.messages, Some(&options)).await
+            }
+            Provider::Google => {
+                gemini::completion_gemini(model, &self.messages, Some(&options)).await
+            }
+            Provider::Fireworks => {
+                fireworks::completion_fireworks(model, &self.messages, Some(&options)).await
+            }
+            Provider::Custom => {
+                custom::completion_custom(model, &self.messages, Some(&options)).await
+            }
         }
     }
 }

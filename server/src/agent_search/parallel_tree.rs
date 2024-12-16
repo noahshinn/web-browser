@@ -1,6 +1,6 @@
-use thiserror::Error;
 use crate::agent_search::AgentSearchResult;
 use crate::search::SearchError;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ParallelTreeAgentSearchError {

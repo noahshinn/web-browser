@@ -1,4 +1,4 @@
-use crate::llm::{CompletionOptions, Message, Model, LLMError};
+use crate::llm::{CompletionOptions, LLMError, Message, Model};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -39,20 +39,21 @@ pub(crate) async fn completion_openai(
         model: model.to_string(),
         messages,
         temperature: options.and_then(|opt| (opt.temperature != 0.0).then_some(opt.temperature)),
-        max_tokens: options.and_then(|opt| {
-            (opt.max_completion_tokens != 0).then_some(opt.max_completion_tokens)
-        }),
+        max_tokens: options
+            .and_then(|opt| (opt.max_completion_tokens != 0).then_some(opt.max_completion_tokens)),
     };
 
     let api_key = match env::var("OPENAI_API_KEY") {
         Ok(key) => key,
-        Err(_) => return Err(LLMError::RequestBuildingError(
-            "OPENAI_API_KEY environment variable not set".to_string()
-        )),
+        Err(_) => {
+            return Err(LLMError::RequestBuildingError(
+                "OPENAI_API_KEY environment variable not set".to_string(),
+            ))
+        }
     };
 
     let mut headers = HeaderMap::new();
-    
+
     let auth_header = match HeaderValue::from_str(&format!("Bearer {api_key}")) {
         Ok(header) => header,
         Err(e) => return Err(LLMError::RequestBuildingError(e.to_string())),

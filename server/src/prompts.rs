@@ -7,7 +7,10 @@ pub struct Prompt {
 
 impl Prompt {
     pub fn new(instruction: String, context: String) -> Self {
-        Self { instruction, context }
+        Self {
+            instruction,
+            context,
+        }
     }
 
     pub fn build_messages(self) -> Vec<Message> {
@@ -27,7 +30,8 @@ impl Prompt {
 pub const WEB_SEARCH_CONTEXT: &str = r#"You are serving a verify specific task within a web search tool for a large language model.
 The context is that you are looping over a set of web search results to build a "findings" document."#;
 
-pub const WEB_SEARCH_USE_SAME_WEB_SEARCH_FINDINGS_DOCUMENT: &str = "USE_SAME_WEB_SEARCH_FINDINGS_DOCUMENT";
+pub const WEB_SEARCH_USE_SAME_WEB_SEARCH_FINDINGS_DOCUMENT: &str =
+    "USE_SAME_WEB_SEARCH_FINDINGS_DOCUMENT";
 
 pub fn build_analyze_result_system_prompt() -> String {
     format!(

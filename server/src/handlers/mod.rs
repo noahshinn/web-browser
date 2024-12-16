@@ -1,2 +1,2 @@
-pub mod search;
 pub mod agent_search;
+pub mod search;

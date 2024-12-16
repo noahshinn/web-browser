@@ -1,7 +1,10 @@
-use thiserror::Error;
+use crate::agent_search::{
+    check_sufficient_information, visit_and_extract_relevant_info, SufficientInformationCheckError,
+    VisitAndExtractRelevantInfoError,
+};
 use crate::agent_search::{AgentSearchResult, AnalysisDocument};
-use crate::search::{SearchError, search};
-use crate::agent_search::{VisitAndExtractRelevantInfoError, SufficientInformationCheckError, visit_and_extract_relevant_info, check_sufficient_information};
+use crate::search::{search, SearchError};
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum SequentialAgentSearchError {
@@ -29,16 +32,28 @@ pub async fn sequential_agent_search(
     };
     while !analysis.unvisited_results.is_empty() {
         let result = analysis.unvisited_results.remove(0);
-        let new_analysis = visit_and_extract_relevant_info(query, &analysis.content, &result).await?;
+        let new_analysis =
+            visit_and_extract_relevant_info(query, &analysis.content, &result).await?;
         analysis.content = new_analysis;
         analysis.visited_results.push(result);
-        match check_sufficient_information(query, &analysis.content, &analysis.visited_results, &analysis.unvisited_results).await {
+        match check_sufficient_information(
+            query,
+            &analysis.content,
+            &analysis.visited_results,
+            &analysis.unvisited_results,
+        )
+        .await
+        {
             Ok(decision) => {
                 if decision.sufficient {
                     break;
                 }
             }
-            Err(e) => return Err(SequentialAgentSearchError::SufficientInformationCheckError(e)),
+            Err(e) => {
+                return Err(SequentialAgentSearchError::SufficientInformationCheckError(
+                    e,
+                ))
+            }
         }
     }
     Ok(AgentSearchResult {

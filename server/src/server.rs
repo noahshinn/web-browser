@@ -1,5 +1,5 @@
-use crate::handlers::search::handle_search;
 use crate::handlers::agent_search::handle_agent_search;
+use crate::handlers::search::handle_search;
 use rocket::routes;
 
 #[derive(Debug)]
@@ -27,27 +27,19 @@ pub struct ServerState {
 }
 
 pub fn create_server() -> Result<rocket::Rocket<rocket::Build>, ServerError> {
-    let searx_host = std::env::var("SEARX_HOST")
-        .unwrap_or_else(|_| "localhost".to_string());
-    let searx_port = std::env::var("SEARX_PORT")
-        .unwrap_or_else(|_| "8096".to_string());
+    let searx_host = std::env::var("SEARX_HOST").unwrap_or_else(|_| "localhost".to_string());
+    let searx_port = std::env::var("SEARX_PORT").unwrap_or_else(|_| "8096".to_string());
 
     Ok(rocket::build()
-        .manage(ServerState { 
-            searx_host: searx_host, 
-            searx_port: searx_port 
+        .manage(ServerState {
+            searx_host: searx_host,
+            searx_port: searx_port,
         })
-        .mount("/", routes![
-            handle_search,
-            handle_agent_search,
-        ]))
+        .mount("/", routes![handle_search, handle_agent_search,]))
 }
 
 pub async fn run_server(rocket: rocket::Rocket<rocket::Build>) -> Result<(), ServerError> {
-    rocket
-        .launch()
-        .await
-        .map_err(ServerError::Launch)?;
-    
+    rocket.launch().await.map_err(ServerError::Launch)?;
+
     Ok(())
 }

@@ -1,13 +1,16 @@
-use thiserror::Error;
-use std::fmt::Display;
 use serde::Deserialize;
+use std::fmt::Display;
+use thiserror::Error;
 
-use crate::search::{search, SearchError};
-use crate::agent_search::{LLMError, SearchResult, AnalysisDocument, AgentSearchResult, VisitAndExtractRelevantInfoError, SufficientInformationCheckError, check_sufficient_information, visit_and_extract_relevant_info};
+use crate::agent_search::{
+    check_sufficient_information, visit_and_extract_relevant_info, AgentSearchResult,
+    AnalysisDocument, LLMError, SearchResult, SufficientInformationCheckError,
+    VisitAndExtractRelevantInfoError,
+};
 use crate::llm::{CompletionBuilder, Model, Provider};
 use crate::prompts::{build_select_next_result_system_prompt, Prompt};
-use crate::utils::{parse_json_response, display_search_results_with_indices};
-
+use crate::search::{search, SearchError};
+use crate::utils::{display_search_results_with_indices, parse_json_response};
 
 #[derive(Error, Debug)]
 pub struct SelectNextResultError(LLMError);
@@ -29,7 +32,6 @@ pub enum HumanAgentSearchError {
     #[error("Failed to select next result: {0}")]
     SelectNextResultError(#[from] SelectNextResultError),
 }
-
 
 #[derive(Deserialize, Debug, Clone)]
 struct NextResultToVisit {
@@ -63,7 +65,6 @@ async fn select_next_result(
     Ok(decision.index)
 }
 
-
 pub async fn human_agent_search(
     query: &str,
     searx_host: &str,
@@ -81,11 +82,13 @@ pub async fn human_agent_search(
     let mut unvisited_results = search_result.clone();
     while !unvisited_results.is_empty() {
         let next_index = match select_next_result(
-            query, 
-            &analysis.content, 
-            &analysis.visited_results, 
-            &unvisited_results
-        ).await {
+            query,
+            &analysis.content,
+            &analysis.visited_results,
+            &unvisited_results,
+        )
+        .await
+        {
             Ok(idx) => idx,
             Err(e) => return Err(HumanAgentSearchError::SelectNextResultError(e)),
         };
@@ -97,7 +100,14 @@ pub async fn human_agent_search(
             }
             Err(e) => return Err(HumanAgentSearchError::VisitAndExtractRelevantInfoError(e)),
         }
-        match check_sufficient_information(query, &analysis.content, &analysis.visited_results, &analysis.unvisited_results).await {
+        match check_sufficient_information(
+            query,
+            &analysis.content,
+            &analysis.visited_results,
+            &analysis.unvisited_results,
+        )
+        .await
+        {
             Ok(decision) => {
                 if decision.sufficient {
                     break;

@@ -1,13 +1,13 @@
 use crate::server::{create_server, run_server};
 use std::env;
 
+pub mod agent_search;
 pub mod handlers;
 pub mod llm;
-pub mod server;
-pub mod search;
-pub mod agent_search;
-pub mod utils;
 pub mod prompts;
+pub mod search;
+pub mod server;
+pub mod utils;
 
 #[rocket::main]
 async fn main() {
@@ -23,12 +23,9 @@ async fn run() -> Result<(), server::ServerError> {
         .and_then(|p| p.parse().ok())
         .unwrap_or(8095);
 
-    let config = rocket::Config::figment()
-        .merge(("port", port));
+    let config = rocket::Config::figment().merge(("port", port));
 
-    let rocket = create_server()?
-        .configure(config);
+    let rocket = create_server()?.configure(config);
 
     run_server(rocket).await
 }
-

@@ -1,4 +1,4 @@
-use crate::llm::{CompletionOptions, Message, Model, LLMError};
+use crate::llm::{CompletionOptions, LLMError, Message, Model};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -33,28 +33,33 @@ pub async fn completion_anthropic(
     messages: &[Message],
     options: Option<&CompletionOptions>,
 ) -> Result<String, LLMError> {
-    let (system_content, messages) = if !messages.is_empty() && matches!(messages[0].role, crate::llm::Role::System) {
-        (Some(messages[0].content.clone()), &messages[1..])
-    } else {
-        (None, messages)
-    };
+    let (system_content, messages) =
+        if !messages.is_empty() && matches!(messages[0].role, crate::llm::Role::System) {
+            (Some(messages[0].content.clone()), &messages[1..])
+        } else {
+            (None, messages)
+        };
 
     let req_body = AnthropicRequest {
         model: model.to_string(),
         messages: messages,
         system: system_content,
-        max_tokens: Some(options
-            .map(|opt| opt.max_completion_tokens)
-            .filter(|&t| t != 0)
-            .unwrap_or(DEFAULT_ANTHROPIC_MAX_COMPLETION_TOKENS)),
+        max_tokens: Some(
+            options
+                .map(|opt| opt.max_completion_tokens)
+                .filter(|&t| t != 0)
+                .unwrap_or(DEFAULT_ANTHROPIC_MAX_COMPLETION_TOKENS),
+        ),
         temperature: options.and_then(|opt| (opt.temperature != 0.0).then_some(opt.temperature)),
     };
 
     let api_key = match env::var("ANTHROPIC_API_KEY") {
         Ok(key) => key,
-        Err(_) => return Err(LLMError::RequestBuildingError(
-            "ANTHROPIC_API_KEY environment variable not set".to_string()
-        )),
+        Err(_) => {
+            return Err(LLMError::RequestBuildingError(
+                "ANTHROPIC_API_KEY environment variable not set".to_string(),
+            ))
+        }
     };
 
     let mut headers = HeaderMap::new();
@@ -64,10 +69,7 @@ pub async fn completion_anthropic(
     };
     headers.insert("x-api-key", api_header);
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-    headers.insert(
-        "anthropic-version",
-        HeaderValue::from_static("2023-06-01"),
-    );
+    headers.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
 
     let client = reqwest::Client::new();
     let response = match client
@@ -91,4 +93,4 @@ pub async fn completion_anthropic(
         .first()
         .map(|content| content.text.clone())
         .ok_or(LLMError::EmptyResponse)
-} 
+}
