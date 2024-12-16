@@ -21,15 +21,11 @@ use tokio::task;
 use tokio::task::JoinError;
 
 pub mod human;
-pub mod multi_query_parallel_tree;
 pub mod parallel;
 pub mod parallel_tree;
 pub mod sequential;
 
 pub use human::{human_agent_search, HumanAgentSearchError};
-pub use multi_query_parallel_tree::{
-    multi_query_parallel_tree_agent_search, MultiQueryParallelTreeAgentSearchError,
-};
 pub use parallel::{parallel_agent_search, ParallelAgentSearchError};
 pub use parallel_tree::{parallel_tree_agent_search, ParallelTreeAgentSearchError};
 pub use sequential::{sequential_agent_search, SequentialAgentSearchError};
@@ -51,8 +47,6 @@ pub enum AgentSearchStrategy {
     Sequential,
     #[serde(rename = "parallel_tree")]
     ParallelTree,
-    #[serde(rename = "multi_query_parallel_tree")]
-    MultiQueryParallelTree,
 }
 
 impl Default for AgentSearchStrategy {
@@ -103,8 +97,6 @@ pub enum AgentSearchError {
     SequentialAgentSearchError(#[from] SequentialAgentSearchError),
     #[error("Parallel tree agent search failed: {0}")]
     ParallelTreeAgentSearchError(#[from] ParallelTreeAgentSearchError),
-    #[error("Multi query parallel tree agent search failed: {0}")]
-    MultiQueryParallelTreeAgentSearchError(#[from] MultiQueryParallelTreeAgentSearchError),
 }
 
 pub async fn agent_search(
@@ -132,11 +124,6 @@ pub async fn agent_search(
             parallel_tree_agent_search(&query.query, searx_host, searx_port)
                 .await
                 .map_err(AgentSearchError::ParallelTreeAgentSearchError)
-        }
-        AgentSearchStrategy::MultiQueryParallelTree => {
-            multi_query_parallel_tree_agent_search(&query.query, searx_host, searx_port)
-                .await
-                .map_err(AgentSearchError::MultiQueryParallelTreeAgentSearchError)
         }
     }
 }
