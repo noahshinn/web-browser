@@ -39,7 +39,11 @@ pub fn create_server() -> Result<rocket::Rocket<rocket::Build>, ServerError> {
 }
 
 pub async fn run_server(rocket: rocket::Rocket<rocket::Build>) -> Result<(), ServerError> {
-    rocket.launch().await.map_err(ServerError::Launch)?;
-
-    Ok(())
+    match rocket.launch().await {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            eprintln!("Failed to launch rocket server: {}", e);
+            Err(ServerError::Launch(e))
+        }
+    }
 }
