@@ -13,15 +13,30 @@ You need to have the following installed:
 make server
 ```
 
-This will start the server and the searxng instance.
+This will start the search server and the searxng instance.
 
-You can test the web search server by running the following command:
+You can test the server by running the following command:
 
 ```bash
 curl http://localhost:8095/v1/agent_search?q=what%20is%20sequence%20parallelism
 ```
 
 This will return a JSON object with the search results.
+
+### Options
+
+Several search strategies are supported. You can specify the strategy with the `strategy` parameter:
+
+```bash
+curl http://localhost:8095/v1/agent_search?q=what%20is%20sequence%20parallelism&strategy=parallel
+```
+
+The following strategies are supported:
+
+- `human`: (default) Searches the web like a human (one result at a time) by choosing the most relevant webpage to visit at each step and terminating when the query is comprehensively answered.
+- `parallel`: (fast) Searches the web in parallel by visiting all of the results at once and aggregating the results at the end.
+- `sequential`: (slow) Searches the web in sequential by visiting the results one at a time.
+- `parallel_tree`: (hybrid) Builds a dependency tree of the results and auto-optimizes the traversal to process all of the results in parallel while respecting dependencies.
 
 ## Development
 
