@@ -1,3 +1,4 @@
+use futures::future::join_all;
 use rocket::form::FromForm;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -5,6 +6,17 @@ use thiserror::Error;
 #[derive(FromForm, Deserialize, Debug, Clone)]
 pub struct SearchQuery {
     pub query: String,
+    #[serde(default)]
+    pub max_results_to_visit: Option<usize>,
+}
+
+impl Default for SearchQuery {
+    fn default() -> Self {
+        Self {
+            query: String::new(),
+            max_results_to_visit: Some(10),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -58,19 +70,20 @@ pub enum SearchError {
     SearxError(String),
 }
 
-pub async fn search(
+async fn single_page_search(
     query: &str,
     searx_host: &str,
     searx_port: &str,
+    pageno: usize,
 ) -> Result<Vec<SearchResult>, SearchError> {
-    if query.trim().is_empty() {
-        return Ok(vec![]);
-    }
     let searx_url = format!("http://{}:{}/search", searx_host, searx_port);
-    let client = reqwest::Client::builder()
+    let client = match reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .build()
-        .map_err(SearchError::RequestError)?;
+    {
+        Ok(client) => client,
+        Err(e) => return Err(SearchError::RequestError(e)),
+    };
     let response = client
         .get(&searx_url)
         .query(&[
@@ -78,6 +91,7 @@ pub async fn search(
             ("format", "json"),
             ("language", "en"),
             ("engines", "google"),
+            ("pageno", pageno.to_string().as_str()),
         ])
         .send()
         .await
@@ -101,4 +115,35 @@ pub async fn search(
             content: result.content,
         })
         .collect())
+}
+
+pub const MAX_RESULTS_TO_VISIT: usize = 10;
+pub const SEARX_RESULTS_PER_PAGE: usize = 8;
+
+pub async fn search(
+    query: &SearchQuery,
+    searx_host: &str,
+    searx_port: &str,
+) -> Result<Vec<SearchResult>, SearchError> {
+    let max_results = query.max_results_to_visit.unwrap_or(MAX_RESULTS_TO_VISIT);
+    let num_pages = (max_results + SEARX_RESULTS_PER_PAGE - 1) / SEARX_RESULTS_PER_PAGE;
+    let futures: Vec<_> = (1..=num_pages)
+        .map(|pageno| single_page_search(&query.query, searx_host, searx_port, pageno))
+        .collect();
+    let results = join_all(futures).await;
+    let mut all_results = Vec::new();
+    for page_result in results {
+        match page_result {
+            Ok(page_results) => {
+                for result in page_results {
+                    if all_results.len() >= max_results {
+                        break;
+                    }
+                    all_results.push(result);
+                }
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(all_results)
 }

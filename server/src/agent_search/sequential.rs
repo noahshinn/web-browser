@@ -1,8 +1,9 @@
 use crate::agent_search::{
-    check_sufficient_information, visit_and_extract_relevant_info, SufficientInformationCheckError,
+    check_sufficient_information, visit_and_extract_relevant_info, AgentSearchResult,
+    AnalysisDocument, SearchQuery, SufficientInformationCheckError,
     VisitAndExtractRelevantInfoError,
 };
-use crate::agent_search::{AgentSearchResult, AnalysisDocument};
+use crate::search;
 use crate::search::{search, SearchError};
 use thiserror::Error;
 
@@ -17,11 +18,20 @@ pub enum SequentialAgentSearchError {
 }
 
 pub async fn sequential_agent_search(
-    query: &str,
+    query: &SearchQuery,
     searx_host: &str,
     searx_port: &str,
 ) -> Result<AgentSearchResult, SequentialAgentSearchError> {
-    let search_result = match search(query, searx_host, searx_port).await {
+    let search_result = match search(
+        &search::SearchQuery {
+            query: query.query.clone(),
+            max_results_to_visit: query.max_results_to_visit,
+        },
+        searx_host,
+        searx_port,
+    )
+    .await
+    {
         Ok(results) => results,
         Err(e) => return Err(SequentialAgentSearchError::SearchError(e)),
     };
@@ -33,11 +43,16 @@ pub async fn sequential_agent_search(
     while !analysis.unvisited_results.is_empty() {
         let result = analysis.unvisited_results.remove(0);
         let new_analysis =
-            visit_and_extract_relevant_info(query, &analysis.content, &result).await?;
+            match visit_and_extract_relevant_info(&query.query, &analysis.content, &result).await {
+                Ok(new_analysis) => new_analysis,
+                Err(e) => {
+                    return Err(SequentialAgentSearchError::VisitAndExtractRelevantInfoError(e))
+                }
+            };
         analysis.content = new_analysis;
         analysis.visited_results.push(result);
         match check_sufficient_information(
-            query,
+            &query.query,
             &analysis.content,
             &analysis.visited_results,
             &analysis.unvisited_results,

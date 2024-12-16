@@ -20,17 +20,19 @@ This will start the search server and the searxng instance.
 You can test the server by running the following command:
 
 ```bash
-curl http://localhost:8095/v1/agent_search?q=what%20is%20sequence%20parallelism
+curl http://localhost:8095/v1/agent_search?query=what%20is%20sequence%20parallelism
 ```
 
 This will return a JSON object with the search results.
 
-### Options
+## Options
+
+### Search strategies
 
 Several search strategies are supported. You can specify the strategy with the `strategy` parameter:
 
 ```bash
-curl http://localhost:8095/v1/agent_search?q=what%20is%20sequence%20parallelism&strategy=parallel
+curl http://localhost:8095/v1/agent_search?query=what%20is%20sequence%20parallelism&strategy=parallel
 ```
 
 The following strategies are supported:
@@ -39,6 +41,14 @@ The following strategies are supported:
 - `parallel`: (fast) Searches the web in parallel by visiting all of the results at once and aggregating the results at the end.
 - `sequential`: (slow) Searches the web in sequential by visiting the results one at a time.
 - `parallel_tree`: (hybrid) Builds a dependency tree of the results and auto-optimizes the traversal to process all of the results in parallel while respecting dependencies.
+
+### Number of results to visit
+
+You can specify the number of results to visit with the `max_results_to_visit` parameter (default is 10):
+
+```bash
+curl http://localhost:8095/v1/agent_search?query=what%20is%20sequence%20parallelism&strategy=parallel&max_results_to_visit=50
+```
 
 ## Development
 

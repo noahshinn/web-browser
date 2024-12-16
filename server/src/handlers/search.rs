@@ -7,20 +7,19 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum SearchResponse {
+    #[serde(rename = "success")]
     Success {
         query: String,
         results: Vec<SearchResult>,
     },
-    Error {
-        message: String,
-        error_type: String,
-    },
+    #[serde(rename = "error")]
+    Error { message: String, error_type: String },
 }
 
 #[get("/v1/search?<query..>")]
 pub async fn handle_search(state: &State<ServerState>, query: SearchQuery) -> Json<SearchResponse> {
     Json(
-        match search(&query.query, &state.searx_host, &state.searx_port).await {
+        match search(&query, &state.searx_host, &state.searx_port).await {
             Ok(results) => SearchResponse::Success {
                 query: query.query,
                 results: results,

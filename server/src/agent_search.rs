@@ -35,6 +35,18 @@ pub struct SearchQuery {
     pub query: String,
     #[serde(default)]
     pub strategy: Option<AgentSearchStrategy>,
+    #[serde(default)]
+    pub max_results_to_visit: Option<usize>,
+}
+
+impl Default for SearchQuery {
+    fn default() -> Self {
+        Self {
+            query: String::new(),
+            strategy: Some(AgentSearchStrategy::Human),
+            max_results_to_visit: Some(10),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, FromFormField)]
@@ -105,23 +117,18 @@ pub async fn agent_search(
     searx_port: &str,
 ) -> Result<AgentSearchResult, AgentSearchError> {
     let strategy = query.strategy.clone().unwrap_or_default();
-
     match strategy {
-        AgentSearchStrategy::Human => human_agent_search(&query.query, searx_host, searx_port)
+        AgentSearchStrategy::Human => human_agent_search(&query, searx_host, searx_port)
             .await
             .map_err(AgentSearchError::HumanAgentSearchError),
-        AgentSearchStrategy::Parallel => {
-            parallel_agent_search(&query.query, searx_host, searx_port)
-                .await
-                .map_err(AgentSearchError::ParallelAgentSearchError)
-        }
-        AgentSearchStrategy::Sequential => {
-            sequential_agent_search(&query.query, searx_host, searx_port)
-                .await
-                .map_err(AgentSearchError::SequentialAgentSearchError)
-        }
+        AgentSearchStrategy::Parallel => parallel_agent_search(&query, searx_host, searx_port)
+            .await
+            .map_err(AgentSearchError::ParallelAgentSearchError),
+        AgentSearchStrategy::Sequential => sequential_agent_search(&query, searx_host, searx_port)
+            .await
+            .map_err(AgentSearchError::SequentialAgentSearchError),
         AgentSearchStrategy::ParallelTree => {
-            parallel_tree_agent_search(&query.query, searx_host, searx_port)
+            parallel_tree_agent_search(&query, searx_host, searx_port)
                 .await
                 .map_err(AgentSearchError::ParallelTreeAgentSearchError)
         }
