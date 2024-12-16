@@ -1,4 +1,6 @@
-# web-browser
+# Web Browser
+
+A tool that automates web search, traversal, and extraction of information on unstructured web pages.
 
 ## Requirements
 
