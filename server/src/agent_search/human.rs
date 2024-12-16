@@ -4,8 +4,8 @@ use serde::Deserialize;
 
 use crate::search::{search, SearchError};
 use crate::agent_search::{LLMError, SearchResult, AnalysisDocument, AgentSearchResult, SearchResultAnalysisError};
-use crate::llm::{Message, Role, CompletionBuilder, Model, Provider};
-use crate::prompts::{build_analyze_result_system_prompt, build_select_next_result_system_prompt, build_sufficient_findings_document_prompt, WEB_SEARCH_USE_SAME_WEB_SEARCH_FINDINGS_DOCUMENT};
+use crate::llm::{CompletionBuilder, Model, Provider};
+use crate::prompts::{build_analyze_result_system_prompt, build_select_next_result_system_prompt, build_sufficient_findings_document_prompt, WEB_SEARCH_USE_SAME_WEB_SEARCH_FINDINGS_DOCUMENT, Prompt};
 use crate::utils::{parse_json_response, display_search_results_with_indices};
 use crate::agent_search::utils::visit_and_parse_webpage;
 
@@ -64,21 +64,12 @@ async fn visit_and_analyze_result(
         Ok(parsed_webpage) => parsed_webpage,
         Err(e) => return Err(SearchResultAnalysisError::WebpageParseError(e)),
     };
-    let content = parsed_webpage.content;
-    let prompt = vec![
-        Message {
-            role: Role::System,
-            content: build_analyze_result_system_prompt(),
-        },
-        Message {
-            role: Role::User,
-            content: format!("# Query:\n{}\n\n# Search result:\n## {} ({})\n\n{}\n\n# Current findings document:\n{}", query, result.title, result.url, content, current_analysis),
-        },
-    ];
+    let user_prompt = format!("# Query:\n{}\n\n# Search result:\n## {} ({})\n\n{}\n\n# Current findings document:\n{}", query, result.title, result.url, parsed_webpage.content, current_analysis);
+    let prompt = Prompt::new(build_analyze_result_system_prompt(), user_prompt);
     let completion = match CompletionBuilder::new()
         .model(Model::Claude35Sonnet)
         .provider(Provider::Anthropic)
-        .messages(prompt)
+        .messages(prompt.build_messages())
         .temperature(0.0)
         .build()
         .await
@@ -86,7 +77,6 @@ async fn visit_and_analyze_result(
         Ok(completion) => completion,
         Err(e) => return Err(SearchResultAnalysisError::LLMError(e)),
     };
-
     if completion.contains(&WEB_SEARCH_USE_SAME_WEB_SEARCH_FINDINGS_DOCUMENT) {
         return Ok(LLMDecision {
             keep_current: true,
@@ -105,20 +95,12 @@ async fn select_next_result(
     visited_results: &[SearchResult],
     unvisited_results: &[SearchResult],
 ) -> Result<usize, SelectNextResultError> {
-    let prompt = vec![
-        Message {
-            role: Role::System,
-            content: build_select_next_result_system_prompt(),
-        },
-        Message {
-            role: Role::User,
-            content: format!("# Query:\n{}\n\n# Current analysis:\n{}\n\n# Visited results:\n{}\n\n# Unvisited results:\n{}", query, current_analysis, display_search_results_with_indices(visited_results), display_search_results_with_indices(unvisited_results)),
-        },
-    ];
+    let user_prompt = format!("# Query:\n{}\n\n# Current analysis:\n{}\n\n# Visited results:\n{}\n\n# Unvisited results:\n{}", query, current_analysis, display_search_results_with_indices(visited_results), display_search_results_with_indices(unvisited_results));
+    let prompt = Prompt::new(build_select_next_result_system_prompt(), user_prompt);
     let completion = match CompletionBuilder::new()
         .model(Model::Claude35Sonnet)
         .provider(Provider::Anthropic)
-        .messages(prompt)
+        .messages(prompt.build_messages())
         .temperature(0.0)
         .build()
         .await
@@ -139,20 +121,12 @@ async fn check_sufficient_findings_document(
     current_analysis: &str,
     used_results: &[SearchResult],
 ) -> Result<SufficientFindingsCheck, InsufficientFindingsCheckError> {
-    let prompt = vec![
-        Message {
-            role: Role::System,
-            content: build_sufficient_findings_document_prompt(),
-        },
-        Message {
-            role: Role::User,
-            content: format!("# Query:\n{}\n\n# Current analysis:\n{}\n\n# Used results:\n{}", query, current_analysis, display_search_results_with_indices(used_results)),
-        },
-    ];
+    let user_prompt = format!("# Query:\n{}\n\n# Current analysis:\n{}\n\n# Used results:\n{}", query, current_analysis, display_search_results_with_indices(used_results));
+    let prompt = Prompt::new(build_sufficient_findings_document_prompt(), user_prompt);
     let completion = match CompletionBuilder::new()
         .model(Model::Claude35Sonnet)
         .provider(Provider::Anthropic)
-        .messages(prompt)
+        .messages(prompt.build_messages())
         .temperature(0.0)
         .build()
         .await
@@ -160,7 +134,6 @@ async fn check_sufficient_findings_document(
         Ok(completion) => completion,
         Err(e) => return Err(InsufficientFindingsCheckError(e)),
     };
-
     let decision: SufficientFindingsCheck = match parse_json_response(&completion) {
         Ok(decision) => decision,
         Err(e) => return Err(InsufficientFindingsCheckError(LLMError::ParseError(e.to_string()))),
@@ -177,14 +150,12 @@ pub async fn human_agent_search(
         Ok(results) => results,
         Err(e) => return Err(HumanAgentSearchError::SearchError(e)),
     };
-
     let mut analysis = AnalysisDocument {
         content: String::new(),
         used_results: Vec::new(),
         discarded_results: Vec::new(),
     };
     let mut unvisited_results = search_result.clone();
-
     while !unvisited_results.is_empty() {
         let next_index = match select_next_result(
             query, 
@@ -195,7 +166,6 @@ pub async fn human_agent_search(
             Ok(idx) => idx,
             Err(e) => return Err(HumanAgentSearchError::SelectNextResultError(e)),
         };
-
         let result = unvisited_results.remove(next_index);
         match visit_and_analyze_result(query, &analysis.content, &result).await {
             Ok(decision) => {
@@ -208,7 +178,6 @@ pub async fn human_agent_search(
             }
             Err(e) => return Err(HumanAgentSearchError::AnalysisError(e)),
         }
-
         match check_sufficient_findings_document(query, &analysis.content, &analysis.used_results).await {
             Ok(decision) => {
                 if decision.sufficient {
@@ -218,7 +187,6 @@ pub async fn human_agent_search(
             Err(e) => return Err(HumanAgentSearchError::InsufficientFindingsCheckError(e)),
         }
     }
-
     Ok(AgentSearchResult {
         analysis,
         raw_results: search_result,
