@@ -52,7 +52,7 @@ impl Default for AgentSearchStrategy {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct SequentialAnalysisDocument {
+pub struct AnalysisDocument {
     pub content: String,
     pub visited_results: Vec<SearchResult>,
     pub unvisited_results: Vec<SearchResult>,
@@ -60,16 +60,22 @@ pub struct SequentialAnalysisDocument {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AgentSearchResult {
-    pub analysis: SequentialAnalysisDocument,
+    pub analysis: AnalysisDocument,
     pub raw_results: Vec<SearchResult>,
 }
 
 #[derive(Error, Debug)]
-pub enum VisitAndExtractRelevantInfoSequentialError {
+pub enum VisitAndExtractRelevantInfoError {
     #[error("LLM error: {0}")]
     LLMError(#[from] LLMError),
     #[error("Webpage parse failed: {0}")]
     WebpageParseError(#[from] WebpageParseError),
+}
+
+#[derive(Error, Debug)]
+pub enum AggregationPassError {
+    #[error("LLM error: {0}")]
+    LLMError(#[from] LLMError),
 }
 
 #[derive(Error, Debug)]
@@ -122,14 +128,14 @@ pub async fn agent_search(
     }
 }
 
-async fn visit_and_extract_relevant_info_sequential(
+async fn visit_and_extract_relevant_info(
     query: &str,
     current_analysis: &str,
     result: &SearchResult,
-) -> Result<String, VisitAndExtractRelevantInfoSequentialError> {
+) -> Result<String, VisitAndExtractRelevantInfoError> {
     let parsed_webpage = match visit_and_parse_webpage(&result.url).await {
         Ok(parsed_webpage) => parsed_webpage,
-        Err(e) => return Err(VisitAndExtractRelevantInfoSequentialError::WebpageParseError(e)),
+        Err(e) => return Err(VisitAndExtractRelevantInfoError::WebpageParseError(e)),
     };
     let user_prompt = format!("# Query:\n{}\n\n# Search result:\n## {} ({})\n\n{}\n\n# Current findings document:\n{}", query, result.title, result.url, parsed_webpage.content, current_analysis);
     let prompt = Prompt::new(build_analyze_result_system_prompt(), user_prompt);
@@ -142,7 +148,7 @@ async fn visit_and_extract_relevant_info_sequential(
         .await
     {
         Ok(completion) => completion,
-        Err(e) => return Err(VisitAndExtractRelevantInfoSequentialError::LLMError(e)),
+        Err(e) => return Err(VisitAndExtractRelevantInfoError::LLMError(e)),
     };
     if completion.contains(&WEB_SEARCH_USE_SAME_WEB_SEARCH_FINDINGS_DOCUMENT) {
         return Ok(current_analysis.to_string());

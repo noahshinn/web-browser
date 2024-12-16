@@ -1,14 +1,14 @@
 use thiserror::Error;
-use crate::agent_search::{AgentSearchResult, SequentialAnalysisDocument};
+use crate::agent_search::{AgentSearchResult, AnalysisDocument};
 use crate::search::{SearchError, search};
-use crate::agent_search::{VisitAndExtractRelevantInfoSequentialError, SufficientInformationCheckError, visit_and_extract_relevant_info_sequential, check_sufficient_information};
+use crate::agent_search::{VisitAndExtractRelevantInfoError, SufficientInformationCheckError, visit_and_extract_relevant_info, check_sufficient_information};
 
 #[derive(Error, Debug)]
 pub enum SequentialAgentSearchError {
     #[error("Search failed: {0}")]
     SearchError(#[from] SearchError),
     #[error("Visit and extract relevant info failed: {0}")]
-    VisitAndExtractRelevantInfoError(#[from] VisitAndExtractRelevantInfoSequentialError),
+    VisitAndExtractRelevantInfoError(#[from] VisitAndExtractRelevantInfoError),
     #[error("Sufficient information check failed: {0}")]
     SufficientInformationCheckError(#[from] SufficientInformationCheckError),
 }
@@ -22,14 +22,14 @@ pub async fn sequential_agent_search(
         Ok(results) => results,
         Err(e) => return Err(SequentialAgentSearchError::SearchError(e)),
     };
-    let mut analysis = SequentialAnalysisDocument {
+    let mut analysis = AnalysisDocument {
         content: String::new(),
         visited_results: Vec::new(),
         unvisited_results: search_result.clone(),
     };
     while !analysis.unvisited_results.is_empty() {
         let result = analysis.unvisited_results.remove(0);
-        let new_analysis = visit_and_extract_relevant_info_sequential(query, &analysis.content, &result).await?;
+        let new_analysis = visit_and_extract_relevant_info(query, &analysis.content, &result).await?;
         analysis.content = new_analysis;
         analysis.visited_results.push(result);
         match check_sufficient_information(query, &analysis.content, &analysis.visited_results, &analysis.unvisited_results).await {

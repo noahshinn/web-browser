@@ -3,7 +3,7 @@ use std::fmt::Display;
 use serde::Deserialize;
 
 use crate::search::{search, SearchError};
-use crate::agent_search::{LLMError, SearchResult, SequentialAnalysisDocument, AgentSearchResult, VisitAndExtractRelevantInfoSequentialError, SufficientInformationCheckError, check_sufficient_information, visit_and_extract_relevant_info_sequential};
+use crate::agent_search::{LLMError, SearchResult, AnalysisDocument, AgentSearchResult, VisitAndExtractRelevantInfoError, SufficientInformationCheckError, check_sufficient_information, visit_and_extract_relevant_info};
 use crate::llm::{CompletionBuilder, Model, Provider};
 use crate::prompts::{build_select_next_result_system_prompt, Prompt};
 use crate::utils::{parse_json_response, display_search_results_with_indices};
@@ -23,7 +23,7 @@ pub enum HumanAgentSearchError {
     #[error("Search failed: {0}")]
     SearchError(#[from] SearchError),
     #[error("Visit and extract relevant info failed: {0}")]
-    VisitAndExtractRelevantInfoError(#[from] VisitAndExtractRelevantInfoSequentialError),
+    VisitAndExtractRelevantInfoError(#[from] VisitAndExtractRelevantInfoError),
     #[error("Sufficient information check failed: {0}")]
     SufficientInformationCheckError(#[from] SufficientInformationCheckError),
     #[error("Failed to select next result: {0}")]
@@ -73,7 +73,7 @@ pub async fn human_agent_search(
         Ok(results) => results,
         Err(e) => return Err(HumanAgentSearchError::SearchError(e)),
     };
-    let mut analysis = SequentialAnalysisDocument {
+    let mut analysis = AnalysisDocument {
         content: String::new(),
         visited_results: Vec::new(),
         unvisited_results: Vec::new(),
@@ -90,7 +90,7 @@ pub async fn human_agent_search(
             Err(e) => return Err(HumanAgentSearchError::SelectNextResultError(e)),
         };
         let result = unvisited_results.remove(next_index);
-        match visit_and_extract_relevant_info_sequential(query, &analysis.content, &result).await {
+        match visit_and_extract_relevant_info(query, &analysis.content, &result).await {
             Ok(new_analysis) => {
                 analysis.content = new_analysis;
                 analysis.unvisited_results.push(result);

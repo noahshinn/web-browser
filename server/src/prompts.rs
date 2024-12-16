@@ -104,3 +104,10 @@ Respond with a JSON object in a markdown code block in the following format:
 ```"#
     )
 }
+
+pub const AGGREGATE_WEB_SEARCH_FINDINGS_PROMPT: &str = r#"# Task
+You will be given a search query and a list of extracted information from visited search results.
+Your task is to aggregate the information from the visited search results into a single document.
+
+## Format
+Your response will be directly used as the document. Write it in markdown."#;
