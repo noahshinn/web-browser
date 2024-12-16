@@ -8,8 +8,8 @@ repos:
       types: [rust]
       pass_filenames: false
 
-    - id: cargo-build-server
-      name: Build Rust server
+    - id: cargo-check-server
+      name: Type check Rust server
       entry: bash -c 'cd ./server && cargo check'
       language: system
       types: [rust]
