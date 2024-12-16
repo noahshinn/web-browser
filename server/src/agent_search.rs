@@ -73,10 +73,7 @@ pub enum VisitAndExtractRelevantInfoError {
 }
 
 #[derive(Error, Debug)]
-pub enum AggregationPassError {
-    #[error("LLM error: {0}")]
-    LLMError(#[from] LLMError),
-}
+pub struct AggregationPassError(LLMError);
 
 #[derive(Error, Debug)]
 pub enum AgentSearchError {
