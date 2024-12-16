@@ -84,7 +84,7 @@ For example:
     )
 }
 
-pub fn build_sufficient_findings_document_prompt() -> String {
+pub fn build_sufficient_information_check_prompt() -> String {
     format!(
         r#"# Task
 You will be given a search query, an in-progress findings document, a list of visited search results, and a list of unvisited search results.

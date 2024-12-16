@@ -1,16 +1,22 @@
 use crate::search::SearchResult;
 use crate::llm::LLMError;
-use crate::agent_search::utils::WebpageParseError;
+use crate::llm::{CompletionBuilder, Model, Provider};
+use crate::prompts::{Prompt, build_analyze_result_system_prompt, WEB_SEARCH_USE_SAME_WEB_SEARCH_FINDINGS_DOCUMENT, build_sufficient_information_check_prompt};
+use crate::utils::{enforce_n_sequential_newlines, display_search_results_with_indices, parse_json_response};
 use rocket::{FromForm, FromFormField};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use std::fmt::Display;
+
+use reqwest;
+use ammonia::Builder;
+use std::collections::HashSet;
 
 pub mod human;
 pub mod parallel;
 pub mod sequential;
 pub mod parallel_tree;
 pub mod multi_query_parallel_tree;
-pub mod utils;
 
 pub use human::{human_agent_search, HumanAgentSearchError};
 pub use parallel::{parallel_agent_search, ParallelAgentSearchError};
@@ -46,21 +52,21 @@ impl Default for AgentSearchStrategy {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct AnalysisDocument {
+pub struct SequentialAnalysisDocument {
     pub content: String,
-    pub used_results: Vec<SearchResult>,
-    pub discarded_results: Vec<SearchResult>,
+    pub visited_results: Vec<SearchResult>,
+    pub unvisited_results: Vec<SearchResult>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AgentSearchResult {
-    pub analysis: AnalysisDocument,
+    pub analysis: SequentialAnalysisDocument,
     pub raw_results: Vec<SearchResult>,
 }
 
 #[derive(Error, Debug)]
-pub enum SearchResultAnalysisError {
-    #[error("Search result analysis failed: {0}")]
+pub enum VisitAndExtractRelevantInfoSequentialError {
+    #[error("LLM error: {0}")]
     LLMError(#[from] LLMError),
     #[error("Webpage parse failed: {0}")]
     WebpageParseError(#[from] WebpageParseError),
@@ -114,4 +120,190 @@ pub async fn agent_search(
             searx_port
         ).await.map_err(AgentSearchError::MultiQueryParallelTreeAgentSearchError),
     }
+}
+
+async fn visit_and_extract_relevant_info_sequential(
+    query: &str,
+    current_analysis: &str,
+    result: &SearchResult,
+) -> Result<String, VisitAndExtractRelevantInfoSequentialError> {
+    let parsed_webpage = match visit_and_parse_webpage(&result.url).await {
+        Ok(parsed_webpage) => parsed_webpage,
+        Err(e) => return Err(VisitAndExtractRelevantInfoSequentialError::WebpageParseError(e)),
+    };
+    let user_prompt = format!("# Query:\n{}\n\n# Search result:\n## {} ({})\n\n{}\n\n# Current findings document:\n{}", query, result.title, result.url, parsed_webpage.content, current_analysis);
+    let prompt = Prompt::new(build_analyze_result_system_prompt(), user_prompt);
+    let completion = match CompletionBuilder::new()
+        .model(Model::Claude35Sonnet)
+        .provider(Provider::Anthropic)
+        .messages(prompt.build_messages())
+        .temperature(0.0)
+        .build()
+        .await
+    {
+        Ok(completion) => completion,
+        Err(e) => return Err(VisitAndExtractRelevantInfoSequentialError::LLMError(e)),
+    };
+    if completion.contains(&WEB_SEARCH_USE_SAME_WEB_SEARCH_FINDINGS_DOCUMENT) {
+        return Ok(current_analysis.to_string());
+    }
+    Ok(completion)
+}
+
+#[derive(Error, Debug)]
+pub enum WebpageParseError {
+    #[error("Failed to fetch webpage: {0}")]
+    FetchError(#[from] reqwest::Error),
+    #[error("Failed to parse webpage")]
+    DomParseError(#[from] DomParseError),
+    #[error("Failed to clean webpage: {0}")]
+    SemanticParseError(#[from] SemanticParseError),
+}
+
+#[derive(Error, Debug)]
+pub enum DomParseError {
+    #[error("Failed to parse webpage")]
+    ParseError(String),
+}
+
+#[derive(Error, Debug)]
+pub enum SemanticParseError {
+    #[error("Failed to parse webpage content: {0}")]
+    ParseError(String),
+}
+
+pub struct ParsedWebpage {
+    pub original_content: String,
+    pub content: String,
+}
+
+pub async fn visit_and_parse_webpage(url: &str) -> Result<ParsedWebpage, WebpageParseError> {
+    let response = match reqwest::get(url).await {
+        Ok(response) => response,
+        Err(e) => return Err(WebpageParseError::FetchError(e)),
+    };
+    let webpage_text = response.text().await.map_err(|e| {
+        WebpageParseError::FetchError(e)
+    })?;
+
+    let dom_text = dom_parse_webpage(&webpage_text)?;
+    // let semantic_text = semantic_parse_webpage(&dom_text).await?;
+    // trim the leading and trailing whitespace
+    let trimmed_text = dom_text.content.trim();
+    Ok(ParsedWebpage {
+        original_content: dom_text.original_content,
+        content: trimmed_text.to_string(),
+    })
+}
+
+const WHITELISTED_ATTRIBUTES: [&str; 10] = [
+    "data-label",
+    "href",
+    "label",
+    "alt",
+    "title",
+    "aria-label",
+    "aria-description",
+    "role",
+    "type",
+    "name",
+];
+const BLACKLISTED_TAGS: [&str; 27] = [
+    "abbr",
+    "script",
+    "style",
+    "noscript",
+    "iframe",
+    "svg",
+    "span",
+    "cite",
+    "i",
+    "b",
+    "u",
+    "em",
+    "strong",
+    "small",
+    "s",
+    "q",
+    "figcaption",
+    "figure",
+    "footer",
+    "header",
+    "nav",
+    "section",
+    "article",
+    "aside",
+    "main",
+    "canvas",
+    "center",
+];
+
+fn dom_parse_webpage(webpage_text: &str) -> Result<ParsedWebpage, DomParseError> {
+    let clean_html = Builder::new()
+        .rm_tags(BLACKLISTED_TAGS)
+        .generic_attributes(HashSet::from_iter(WHITELISTED_ATTRIBUTES))
+        .attribute_filter(|element, attribute, value| {
+            match (element, attribute) {
+                ("div", "src") => None,
+                ("img", "src") => None,
+                ("img", "height") => None,
+                ("img", "width") => None,
+                ("a", "rel") => None,
+                _ => Some(value.into())
+            }
+        })
+        .strip_comments(true)
+        .clean(&webpage_text)
+        .to_string();
+    let clean_html = clean_html
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .collect::<Vec<&str>>()
+        .join("\n");
+    let clean_html = enforce_n_sequential_newlines(&clean_html, 2);
+    Ok(ParsedWebpage {
+        original_content: webpage_text.to_string(),
+        content: clean_html,
+    })
+}
+
+
+#[derive(Deserialize, Debug, Clone)]
+struct SufficientInformationCheck {
+    sufficient: bool,
+}
+
+#[derive(Error, Debug)]
+pub struct SufficientInformationCheckError(LLMError);
+
+impl Display for SufficientInformationCheckError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Sufficient information check failed: {}", self.0)
+    }
+}
+
+async fn check_sufficient_information(
+    query: &str,
+    current_analysis: &str,
+    visited_results: &[SearchResult],
+    unvisited_results: &[SearchResult],
+) -> Result<SufficientInformationCheck, SufficientInformationCheckError> {
+    let user_prompt = format!("# Query:\n{}\n\n# Current analysis:\n{}\n\n# Visited results:\n{}\n\n# Unvisited results:\n{}", query, current_analysis, display_search_results_with_indices(visited_results), display_search_results_with_indices(unvisited_results));
+    let prompt = Prompt::new(build_sufficient_information_check_prompt(), user_prompt);
+    let completion = match CompletionBuilder::new()
+        .model(Model::Claude35Sonnet)
+        .provider(Provider::Anthropic)
+        .messages(prompt.build_messages())
+        .temperature(0.0)
+        .build()
+        .await
+    {
+        Ok(completion) => completion,
+        Err(e) => return Err(SufficientInformationCheckError(e)),
+    };
+    let decision: SufficientInformationCheck = match parse_json_response(&completion) {
+        Ok(decision) => decision,
+        Err(e) => return Err(SufficientInformationCheckError(LLMError::ParseError(e.to_string()))),
+    };
+    Ok(decision)
 }

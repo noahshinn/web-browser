@@ -50,3 +50,20 @@ pub fn parse_json_response<T: DeserializeOwned>(completion: &str) -> Result<T, P
     let parsed = serde_json::from_str(&json_string)?;
     Ok(parsed)
 }
+
+pub fn enforce_n_sequential_newlines(text: &str, n: usize) -> String {
+    let mut result = String::with_capacity(text.len());
+    let mut newline_count = 0;
+    for c in text.chars() {
+        if c == '\n' {
+            newline_count += 1;
+            if newline_count <= n {
+                result.push(c);
+            }
+        } else {
+            newline_count = 0;
+            result.push(c);
+        }
+    }
+    result
+}
