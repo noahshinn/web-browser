@@ -115,3 +115,35 @@ Your task is to aggregate the information from the visited search results into a
 
 ## Format
 Your response will be directly used as the document. Write it in markdown."#;
+
+pub fn build_dependency_tree_system_prompt() -> String {
+    format!(
+        r#"# Task
+You will be given a search query and a list of search results.
+Your task is to organize these results into levels based on their dependencies.
+Results that depend on information from other results should be placed in later levels.
+Results that can be processed independently should be in the same level.
+The goal is to create a dependency tree that outlines the fastest way to process the results while not compromising on quality.
+Most of the time, you will find that the results are independent and can be processed in parallel.
+However, if certain sources should only be visited after others due to a dependency in the information, you should place them in the same level.
+
+## General context
+{WEB_SEARCH_CONTEXT}
+
+## Format
+Respond with a JSON object in a markdown code block:
+
+```json
+{{
+    "levels": [
+        [0, 2], // Level 0: Results that can be processed first
+        [1, 4], // Level 1: Results that depend on level 0
+        [3] // Level 2: Results that depend on level 1
+    ]
+}}
+```
+"
+
+Each number represents the index of a search result in the input list."#
+    )
+}

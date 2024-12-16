@@ -2,7 +2,7 @@ use crate::llm::LLMError;
 use crate::llm::{CompletionBuilder, Model, Provider};
 use crate::prompts::{
     build_analyze_result_system_prompt, build_sufficient_information_check_prompt, Prompt,
-    WEB_SEARCH_USE_SAME_WEB_SEARCH_FINDINGS_DOCUMENT,
+    AGGREGATE_WEB_SEARCH_FINDINGS_PROMPT, WEB_SEARCH_USE_SAME_WEB_SEARCH_FINDINGS_DOCUMENT,
 };
 use crate::search::SearchResult;
 use crate::utils::{
@@ -14,8 +14,10 @@ use std::fmt::Display;
 use thiserror::Error;
 
 use ammonia::Builder;
+use futures::future::join_all;
 use reqwest;
 use std::collections::HashSet;
+use tokio::task;
 use tokio::task::JoinError;
 
 pub mod human;
@@ -300,6 +302,12 @@ impl Display for SufficientInformationCheckError {
     }
 }
 
+#[derive(Deserialize, Debug, Clone)]
+struct ExtractionResult {
+    search_result: SearchResult,
+    content: String,
+}
+
 async fn check_sufficient_information(
     query: &str,
     current_analysis: &str,
@@ -328,4 +336,88 @@ async fn check_sufficient_information(
         }
     };
     Ok(decision)
+}
+
+pub async fn parallel_visit_and_extract_relevant_info(
+    query: &str,
+    search_results: &[SearchResult],
+    current_analysis: &str,
+) -> Result<AgentSearchResult, ParallelAgentSearchError> {
+    let extraction_tasks = search_results
+        .iter()
+        .map(|result| {
+            let query = query.to_string();
+            let current_analysis = current_analysis.to_string();
+            let result = result.clone();
+            task::spawn(async move {
+                visit_and_extract_relevant_info(query.as_str(), &current_analysis, &result).await
+            })
+        })
+        .collect::<Vec<_>>();
+    let extraction_results: Vec<ExtractionResult> = join_all(extraction_tasks)
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .enumerate()
+        .map(|(index, result)| {
+            result
+                .map(|content| ExtractionResult {
+                    search_result: search_results[index].clone(),
+                    content,
+                })
+                .map_err(ParallelAgentSearchError::VisitAndExtractRelevantInfoError)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let aggregated_result = match aggregate_results(query, extraction_results).await {
+        Ok(result) => AgentSearchResult {
+            analysis: AnalysisDocument {
+                content: result,
+                visited_results: search_results.to_vec(),
+                unvisited_results: Vec::new(),
+            },
+            raw_results: search_results.to_vec(),
+        },
+        Err(e) => return Err(ParallelAgentSearchError::AggregationPassError(e)),
+    };
+    Ok(aggregated_result)
+}
+
+async fn aggregate_results(
+    query: &str,
+    extraction_results: Vec<ExtractionResult>,
+) -> Result<String, AggregationPassError> {
+    let extraction_results_display = extraction_results
+        .iter()
+        .map(|result| {
+            format!(
+                "## {} ({})\n\n{}",
+                result.search_result.title, result.search_result.url, result.content
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    let user_prompt = format!(
+        r#"# Search query
+{query}
+
+# Extracted information
+{extraction_results_display}"#
+    );
+    let prompt = Prompt::new(
+        AGGREGATE_WEB_SEARCH_FINDINGS_PROMPT.to_string(),
+        user_prompt,
+    );
+    let completion = match CompletionBuilder::new()
+        .model(Model::Claude35Sonnet)
+        .provider(Provider::Anthropic)
+        .messages(prompt.build_messages())
+        .temperature(0.0)
+        .build()
+        .await
+    {
+        Ok(completion) => completion,
+        Err(e) => return Err(AggregationPassError(e)),
+    };
+    Ok(completion)
 }
