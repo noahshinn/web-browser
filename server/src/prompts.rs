@@ -1,3 +1,28 @@
+use crate::llm::{Message, Role};
+
+pub struct Prompt {
+    pub instruction: String,
+    pub context: String,
+}
+
+impl Prompt {
+    pub fn new(instruction: String, context: String) -> Self {
+        Self { instruction, context }
+    }
+
+    pub fn build_messages(self) -> Vec<Message> {
+        vec![
+            Message {
+                role: Role::System,
+                content: self.instruction,
+            },
+            Message {
+                role: Role::User,
+                content: self.context,
+            },
+        ]
+    }
+}
 
 pub const WEB_SEARCH_CONTEXT: &str = r#"You are serving a verify specific task within a web search tool for a large language model.
 The context is that you are looping over a set of web search results to build a "findings" document."#;

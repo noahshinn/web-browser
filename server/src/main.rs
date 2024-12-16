@@ -31,3 +31,4 @@ async fn run() -> Result<(), server::ServerError> {
 
     run_server(rocket).await
 }
+

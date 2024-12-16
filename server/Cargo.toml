@@ -12,3 +12,7 @@ rocket = { version = "0.5.1", features = ["json"] }
 clap = { version = "4.5.23", features = ["derive"] }
 thiserror = "2.0.7"
 regex = "1.11.1"
+scraper = "0.22.0"
+fancy-regex = "0.14.0"
+ammonia = "4"
+maplit = "1.0.2"

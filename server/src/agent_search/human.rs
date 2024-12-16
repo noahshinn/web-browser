@@ -7,6 +7,7 @@ use crate::agent_search::{LLMError, SearchResult, AnalysisDocument, AgentSearchR
 use crate::llm::{Message, Role, CompletionBuilder, Model, Provider};
 use crate::prompts::{build_analyze_result_system_prompt, build_select_next_result_system_prompt, build_sufficient_findings_document_prompt, WEB_SEARCH_USE_SAME_WEB_SEARCH_FINDINGS_DOCUMENT};
 use crate::utils::{parse_json_response, display_search_results_with_indices};
+use crate::agent_search::utils::visit_and_parse_webpage;
 
 #[derive(Error, Debug)]
 pub struct InsufficientFindingsCheckError(LLMError);
@@ -54,11 +55,16 @@ struct SufficientFindingsCheck {
     sufficient: bool,
 }
 
-async fn analyze_result(
+async fn visit_and_analyze_result(
     query: &str,
     current_analysis: &str,
     result: &SearchResult,
 ) -> Result<LLMDecision, SearchResultAnalysisError> {
+    let parsed_webpage = match visit_and_parse_webpage(&result.url).await {
+        Ok(parsed_webpage) => parsed_webpage,
+        Err(e) => return Err(SearchResultAnalysisError::WebpageParseError(e)),
+    };
+    let content = parsed_webpage.content;
     let prompt = vec![
         Message {
             role: Role::System,
@@ -66,7 +72,7 @@ async fn analyze_result(
         },
         Message {
             role: Role::User,
-            content: format!("# Query:\n{}\n\n# Search result:\n{}\n\n# Current findings document:\n{}", query, result, current_analysis),
+            content: format!("# Query:\n{}\n\n# Search result:\n## {} ({})\n\n{}\n\n# Current findings document:\n{}", query, result.title, result.url, content, current_analysis),
         },
     ];
     let completion = match CompletionBuilder::new()
@@ -78,7 +84,7 @@ async fn analyze_result(
         .await
     {
         Ok(completion) => completion,
-        Err(e) => return Err(SearchResultAnalysisError(e)),
+        Err(e) => return Err(SearchResultAnalysisError::LLMError(e)),
     };
 
     if completion.contains(&WEB_SEARCH_USE_SAME_WEB_SEARCH_FINDINGS_DOCUMENT) {
@@ -191,7 +197,7 @@ pub async fn human_agent_search(
         };
 
         let result = unvisited_results.remove(next_index);
-        match analyze_result(query, &analysis.content, &result).await {
+        match visit_and_analyze_result(query, &analysis.content, &result).await {
             Ok(decision) => {
                 if decision.keep_current {
                     analysis.discarded_results.push(result);
@@ -214,7 +220,7 @@ pub async fn human_agent_search(
     }
 
     Ok(AgentSearchResult {
-        analysis: analysis,
+        analysis,
         raw_results: search_result,
     })
 }

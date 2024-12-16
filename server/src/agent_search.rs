@@ -1,15 +1,16 @@
 use crate::search::SearchResult;
 use crate::llm::LLMError;
+use crate::agent_search::utils::WebpageParseError;
 use rocket::{FromForm, FromFormField};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use std::fmt::Display;
 
 pub mod human;
 pub mod parallel;
 pub mod sequential;
 pub mod parallel_tree;
 pub mod multi_query_parallel_tree;
+pub mod utils;
 
 pub use human::{human_agent_search, HumanAgentSearchError};
 pub use parallel::{parallel_agent_search, ParallelAgentSearchError};
@@ -58,12 +59,11 @@ pub struct AgentSearchResult {
 }
 
 #[derive(Error, Debug)]
-pub struct SearchResultAnalysisError(LLMError);
-
-impl Display for SearchResultAnalysisError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Search result analysis failed: {}", self.0)
-    }
+pub enum SearchResultAnalysisError {
+    #[error("Search result analysis failed: {0}")]
+    LLMError(#[from] LLMError),
+    #[error("Webpage parse failed: {0}")]
+    WebpageParseError(#[from] WebpageParseError),
 }
 
 #[derive(Error, Debug)]
