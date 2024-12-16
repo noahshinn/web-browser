@@ -16,6 +16,7 @@ use thiserror::Error;
 use ammonia::Builder;
 use reqwest;
 use std::collections::HashSet;
+use tokio::task::JoinError;
 
 pub mod human;
 pub mod multi_query_parallel_tree;
@@ -77,10 +78,18 @@ pub enum VisitAndExtractRelevantInfoError {
     LLMError(#[from] LLMError),
     #[error("Webpage parse failed: {0}")]
     WebpageParseError(#[from] WebpageParseError),
+    #[error("Join error: {0}")]
+    JoinError(#[from] JoinError),
 }
 
 #[derive(Error, Debug)]
 pub struct AggregationPassError(LLMError);
+
+impl Display for AggregationPassError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Aggregation pass failed: {}", self.0)
+    }
+}
 
 #[derive(Error, Debug)]
 pub enum AgentSearchError {

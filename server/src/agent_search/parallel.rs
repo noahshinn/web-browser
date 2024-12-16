@@ -1,13 +1,16 @@
 use crate::agent_search::{
     visit_and_extract_relevant_info, AggregationPassError, VisitAndExtractRelevantInfoError,
 };
-use crate::agent_search::{AgentSearchResult, AnalysisDocument};
+use crate::agent_search::{AgentSearchResult, AnalysisDocument, SearchResult};
+use crate::llm::{CompletionBuilder, Model, Provider};
 use crate::prompts::{Prompt, AGGREGATE_WEB_SEARCH_FINDINGS_PROMPT};
 use crate::search::search;
 use crate::search::SearchError;
 use futures::future::join_all;
+use serde::Deserialize;
 use thiserror::Error;
 use tokio::task;
+use tokio::task::JoinError;
 
 #[derive(Error, Debug)]
 pub enum ParallelAgentSearchError {
@@ -17,6 +20,8 @@ pub enum ParallelAgentSearchError {
     VisitAndExtractRelevantInfoError(#[from] VisitAndExtractRelevantInfoError),
     #[error("Aggregation pass failed: {0}")]
     AggregationPassError(#[from] AggregationPassError),
+    #[error("Join error: {0}")]
+    JoinError(#[from] JoinError),
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -38,24 +43,32 @@ pub async fn parallel_agent_search(
         .iter()
         .map(|result| {
             let query = query.to_string();
-            task::spawn(
-                async move { visit_and_extract_relevant_info(query.as_str(), "", result).await },
-            )
+            let result = result.clone();
+            task::spawn(async move {
+                visit_and_extract_relevant_info(query.as_str(), "", &result).await
+            })
         })
         .collect::<Vec<_>>();
-    let extraction_results = join_all(extraction_tasks)
+    let extraction_results: Vec<ExtractionResult> = join_all(extraction_tasks)
         .await
         .into_iter()
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| ParallelAgentSearchError::VisitAndExtractRelevantInfoError(e))?
+        .collect::<Result<Vec<_>, _>>()?
         .into_iter()
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| ParallelAgentSearchError::VisitAndExtractRelevantInfoError(e))?;
+        .enumerate()
+        .map(|(index, result)| {
+            result
+                .map(|content| ExtractionResult {
+                    search_result: search_results[index].clone(),
+                    content,
+                })
+                .map_err(ParallelAgentSearchError::VisitAndExtractRelevantInfoError)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     let aggregated_result = aggregate_results(query, extraction_results).await?;
     Ok(AgentSearchResult {
         analysis: AnalysisDocument {
             content: aggregated_result,
-            visited_results: search_results,
+            visited_results: search_results.clone(),
             unvisited_results: Vec::new(),
         },
         raw_results: search_results,
@@ -87,8 +100,16 @@ async fn aggregate_results(
         AGGREGATE_WEB_SEARCH_FINDINGS_PROMPT.to_string(),
         user_prompt,
     );
-    match prompt.send_message(query, extraction_results).await {
-        Ok(response) => Ok(response),
-        Err(e) => Err(AggregationPassError::LLMError(e)),
-    }
+    let completion = match CompletionBuilder::new()
+        .model(Model::Claude35Sonnet)
+        .provider(Provider::Anthropic)
+        .messages(prompt.build_messages())
+        .temperature(0.0)
+        .build()
+        .await
+    {
+        Ok(completion) => completion,
+        Err(e) => return Err(AggregationPassError(e)),
+    };
+    Ok(completion)
 }
