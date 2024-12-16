@@ -1,4 +1,4 @@
-use crate::server::create_server;
+use crate::server::{create_server, run_server};
 use std::env;
 
 pub mod handlers;
@@ -8,8 +8,16 @@ pub mod search;
 pub mod agent_search;
 pub mod utils;
 pub mod prompts;
+
 #[rocket::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() {
+    if let Err(e) = run().await {
+        eprintln!("Server error: {}", e);
+        std::process::exit(1);
+    }
+}
+
+async fn run() -> Result<(), server::ServerError> {
     let port: u16 = env::var("WEB_SEARCH_SERVER_PORT")
         .ok()
         .and_then(|p| p.parse().ok())
@@ -18,9 +26,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = rocket::Config::figment()
         .merge(("port", port));
 
-    create_server()
-        .configure(config)
-        .launch()
-        .await?;
-    Ok(())
+    let rocket = create_server()?
+        .configure(config);
+
+    run_server(rocket).await
 }
