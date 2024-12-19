@@ -4,13 +4,13 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(FromForm, Deserialize, Debug, Clone)]
-pub struct SearchQuery {
+pub struct SearchInput {
     pub query: String,
     #[serde(default)]
     pub max_results_to_visit: Option<usize>,
 }
 
-impl Default for SearchQuery {
+impl Default for SearchInput {
     fn default() -> Self {
         Self {
             query: String::new(),
@@ -121,14 +121,16 @@ pub const MAX_RESULTS_TO_VISIT: usize = 10;
 pub const SEARX_RESULTS_PER_PAGE: usize = 8;
 
 pub async fn search(
-    query: &SearchQuery,
+    search_input: &SearchInput,
     searx_host: &str,
     searx_port: &str,
 ) -> Result<Vec<SearchResult>, SearchError> {
-    let max_results = query.max_results_to_visit.unwrap_or(MAX_RESULTS_TO_VISIT);
+    let max_results = search_input
+        .max_results_to_visit
+        .unwrap_or(MAX_RESULTS_TO_VISIT);
     let num_pages = (max_results + SEARX_RESULTS_PER_PAGE - 1) / SEARX_RESULTS_PER_PAGE;
     let futures: Vec<_> = (1..=num_pages)
-        .map(|pageno| single_page_search(&query.query, searx_host, searx_port, pageno))
+        .map(|pageno| single_page_search(&search_input.query, searx_host, searx_port, pageno))
         .collect();
     let results = join_all(futures).await;
     let mut all_results = Vec::new();

@@ -20,7 +20,12 @@ This will start the search server and the searxng instance.
 You can test the server by running the following command:
 
 ```bash
-curl http://localhost:8095/v1/agent_search?query=what%20is%20sequence%20parallelism
+curl -X POST http://localhost:8095/v1/agent_search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "what is sequence parallelism",
+    "strategy": "human"
+  }'
 ```
 
 This will return a JSON object with the search results.
@@ -29,10 +34,15 @@ This will return a JSON object with the search results.
 
 ### Search strategies
 
-Several search strategies are supported. You can specify the strategy with the `strategy` parameter:
+Several search strategies are supported. You can specify the strategy in the JSON body:
 
 ```bash
-curl http://localhost:8095/v1/agent_search?query=what%20is%20sequence%20parallelism&strategy=parallel
+curl -X POST http://localhost:8095/v1/agent_search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "what is sequence parallelism",
+    "strategy": "parallel"
+  }'
 ```
 
 The following strategies are supported:
@@ -44,11 +54,7 @@ The following strategies are supported:
 
 ### Number of results to visit
 
-You can specify the number of results to visit with the `max_results_to_visit` parameter (default is 10):
-
-```bash
-curl http://localhost:8095/v1/agent_search?query=what%20is%20sequence%20parallelism&strategy=parallel&max_results_to_visit=50
-```
+You can specify the number of results to visit with the `max_results_to_visit` field in the JSON body (default is 10).
 
 ## Development
 
@@ -83,7 +89,7 @@ A searxng instance will be running on port 8096.
 You can test the searxng instance by navigating to `http://localhost:8096/` in your browser or by running the following command:
 
 ```bash
-curl http://localhost:8096/search?q=what%20is%20sequence%20parallelism
+curl http://localhost:8096/search?q=what+is+sequence+parallelism
 ```
 
 Then, open a new shell and set the following environment variables:

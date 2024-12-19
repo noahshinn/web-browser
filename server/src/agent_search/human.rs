@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use crate::agent_search::{
     check_sufficient_information, visit_and_extract_relevant_info, AgentSearchResult,
-    AnalysisDocument, LLMError, SearchQuery, SearchResult, SufficientInformationCheckError,
+    AnalysisDocument, LLMError, SearchInput, SearchResult, SufficientInformationCheckError,
     VisitAndExtractRelevantInfoError,
 };
 use crate::llm::{CompletionBuilder, Model, Provider};
@@ -67,14 +67,14 @@ async fn select_next_result(
 }
 
 pub async fn human_agent_search(
-    query: &SearchQuery,
+    search_input: &SearchInput,
     searx_host: &str,
     searx_port: &str,
 ) -> Result<AgentSearchResult, HumanAgentSearchError> {
     let search_result = match search(
-        &search::SearchQuery {
-            query: query.query.clone(),
-            max_results_to_visit: query.max_results_to_visit,
+        &search::SearchInput {
+            query: search_input.query.clone(),
+            max_results_to_visit: search_input.max_results_to_visit,
         },
         searx_host,
         searx_port,
@@ -92,7 +92,7 @@ pub async fn human_agent_search(
     let mut unvisited_results = search_result.clone();
     while !unvisited_results.is_empty() {
         let next_index = match select_next_result(
-            &query.query,
+            &search_input.query,
             &analysis.content,
             &analysis.visited_results,
             &unvisited_results,
@@ -103,7 +103,8 @@ pub async fn human_agent_search(
             Err(e) => return Err(HumanAgentSearchError::SelectNextResultError(e)),
         };
         let result = unvisited_results.remove(next_index);
-        match visit_and_extract_relevant_info(&query.query, &analysis.content, &result).await {
+        match visit_and_extract_relevant_info(&search_input.query, &analysis.content, &result).await
+        {
             Ok(new_analysis) => {
                 analysis.content = new_analysis;
                 analysis.unvisited_results.push(result);
@@ -111,7 +112,7 @@ pub async fn human_agent_search(
             Err(e) => return Err(HumanAgentSearchError::VisitAndExtractRelevantInfoError(e)),
         }
         match check_sufficient_information(
-            &query.query,
+            &search_input.query,
             &analysis.content,
             &analysis.visited_results,
             &analysis.unvisited_results,

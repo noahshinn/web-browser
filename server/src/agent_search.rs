@@ -31,7 +31,7 @@ pub use parallel_tree::{parallel_tree_agent_search, ParallelTreeAgentSearchError
 pub use sequential::{sequential_agent_search, SequentialAgentSearchError};
 
 #[derive(Deserialize, Debug, Clone, FromForm)]
-pub struct SearchQuery {
+pub struct SearchInput {
     pub query: String,
     #[serde(default)]
     pub strategy: Option<AgentSearchStrategy>,
@@ -39,7 +39,7 @@ pub struct SearchQuery {
     pub max_results_to_visit: Option<usize>,
 }
 
-impl Default for SearchQuery {
+impl Default for SearchInput {
     fn default() -> Self {
         Self {
             query: String::new(),
@@ -112,23 +112,27 @@ pub enum AgentSearchError {
 }
 
 pub async fn agent_search(
-    query: &SearchQuery,
+    search_input: &SearchInput,
     searx_host: &str,
     searx_port: &str,
 ) -> Result<AgentSearchResult, AgentSearchError> {
-    let strategy = query.strategy.clone().unwrap_or_default();
+    let strategy = search_input.strategy.clone().unwrap_or_default();
     match strategy {
-        AgentSearchStrategy::Human => human_agent_search(&query, searx_host, searx_port)
+        AgentSearchStrategy::Human => human_agent_search(&search_input, searx_host, searx_port)
             .await
             .map_err(AgentSearchError::HumanAgentSearchError),
-        AgentSearchStrategy::Parallel => parallel_agent_search(&query, searx_host, searx_port)
-            .await
-            .map_err(AgentSearchError::ParallelAgentSearchError),
-        AgentSearchStrategy::Sequential => sequential_agent_search(&query, searx_host, searx_port)
-            .await
-            .map_err(AgentSearchError::SequentialAgentSearchError),
+        AgentSearchStrategy::Parallel => {
+            parallel_agent_search(&search_input, searx_host, searx_port)
+                .await
+                .map_err(AgentSearchError::ParallelAgentSearchError)
+        }
+        AgentSearchStrategy::Sequential => {
+            sequential_agent_search(&search_input, searx_host, searx_port)
+                .await
+                .map_err(AgentSearchError::SequentialAgentSearchError)
+        }
         AgentSearchStrategy::ParallelTree => {
-            parallel_tree_agent_search(&query, searx_host, searx_port)
+            parallel_tree_agent_search(&search_input, searx_host, searx_port)
                 .await
                 .map_err(AgentSearchError::ParallelTreeAgentSearchError)
         }

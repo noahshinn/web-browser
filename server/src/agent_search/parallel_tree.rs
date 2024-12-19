@@ -1,6 +1,6 @@
 use crate::agent_search::VisitAndExtractRelevantInfoError;
 use crate::agent_search::{
-    parallel_visit_and_extract_relevant_info, AgentSearchResult, AnalysisDocument, SearchQuery,
+    parallel_visit_and_extract_relevant_info, AgentSearchResult, AnalysisDocument, SearchInput,
     SearchResult,
 };
 use crate::llm::{CompletionBuilder, LLMError, Model, Provider};
@@ -99,14 +99,14 @@ async fn process_level(
 }
 
 pub async fn parallel_tree_agent_search(
-    query: &SearchQuery,
+    search_input: &SearchInput,
     searx_host: &str,
     searx_port: &str,
 ) -> Result<AgentSearchResult, ParallelTreeAgentSearchError> {
     let search_results = match search(
-        &search::SearchQuery {
-            query: query.query.clone(),
-            max_results_to_visit: query.max_results_to_visit,
+        &search::SearchInput {
+            query: search_input.query.clone(),
+            max_results_to_visit: search_input.max_results_to_visit,
         },
         searx_host,
         searx_port,
@@ -117,7 +117,7 @@ pub async fn parallel_tree_agent_search(
         Err(e) => return Err(ParallelTreeAgentSearchError::SearchError(e)),
     };
 
-    let dependency_tree = construct_dependency_tree(&query.query, &search_results)
+    let dependency_tree = construct_dependency_tree(&search_input.query, &search_results)
         .await
         .map_err(ParallelTreeAgentSearchError::TreeConstructionError)?;
 
@@ -125,8 +125,13 @@ pub async fn parallel_tree_agent_search(
     let mut visited_results = Vec::new();
 
     for level in dependency_tree.levels {
-        current_analysis =
-            process_level(&query.query, &search_results, &level, &current_analysis).await?;
+        current_analysis = process_level(
+            &search_input.query,
+            &search_results,
+            &level,
+            &current_analysis,
+        )
+        .await?;
         visited_results.extend(level.iter().map(|&idx| search_results[idx].clone()));
     }
 

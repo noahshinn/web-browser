@@ -1,5 +1,5 @@
 use crate::agent_search::{
-    parallel_visit_and_extract_relevant_info, AgentSearchResult, AggregationPassError, SearchQuery,
+    parallel_visit_and_extract_relevant_info, AgentSearchResult, AggregationPassError, SearchInput,
     VisitAndExtractRelevantInfoError,
 };
 use crate::search;
@@ -20,14 +20,14 @@ pub enum ParallelAgentSearchError {
 }
 
 pub async fn parallel_agent_search(
-    query: &SearchQuery,
+    search_input: &SearchInput,
     searx_host: &str,
     searx_port: &str,
 ) -> Result<AgentSearchResult, ParallelAgentSearchError> {
     let search_results = match search(
-        &search::SearchQuery {
-            query: query.query.clone(),
-            max_results_to_visit: query.max_results_to_visit,
+        &search::SearchInput {
+            query: search_input.query.clone(),
+            max_results_to_visit: search_input.max_results_to_visit,
         },
         searx_host,
         searx_port,
@@ -37,5 +37,5 @@ pub async fn parallel_agent_search(
         Ok(results) => results,
         Err(e) => return Err(ParallelAgentSearchError::SearchError(e)),
     };
-    parallel_visit_and_extract_relevant_info(&query.query, &search_results, "").await
+    parallel_visit_and_extract_relevant_info(&search_input.query, &search_results, "").await
 }

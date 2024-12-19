@@ -1,6 +1,6 @@
 use crate::agent_search::{
     check_sufficient_information, visit_and_extract_relevant_info, AgentSearchResult,
-    AnalysisDocument, SearchQuery, SufficientInformationCheckError,
+    AnalysisDocument, SearchInput, SufficientInformationCheckError,
     VisitAndExtractRelevantInfoError,
 };
 use crate::search;
@@ -18,14 +18,14 @@ pub enum SequentialAgentSearchError {
 }
 
 pub async fn sequential_agent_search(
-    query: &SearchQuery,
+    search_input: &SearchInput,
     searx_host: &str,
     searx_port: &str,
 ) -> Result<AgentSearchResult, SequentialAgentSearchError> {
     let search_result = match search(
-        &search::SearchQuery {
-            query: query.query.clone(),
-            max_results_to_visit: query.max_results_to_visit,
+        &search::SearchInput {
+            query: search_input.query.clone(),
+            max_results_to_visit: search_input.max_results_to_visit,
         },
         searx_host,
         searx_port,
@@ -43,7 +43,9 @@ pub async fn sequential_agent_search(
     while !analysis.unvisited_results.is_empty() {
         let result = analysis.unvisited_results.remove(0);
         let new_analysis =
-            match visit_and_extract_relevant_info(&query.query, &analysis.content, &result).await {
+            match visit_and_extract_relevant_info(&search_input.query, &analysis.content, &result)
+                .await
+            {
                 Ok(new_analysis) => new_analysis,
                 Err(e) => {
                     return Err(SequentialAgentSearchError::VisitAndExtractRelevantInfoError(e))
@@ -52,7 +54,7 @@ pub async fn sequential_agent_search(
         analysis.content = new_analysis;
         analysis.visited_results.push(result);
         match check_sufficient_information(
-            &query.query,
+            &search_input.query,
             &analysis.content,
             &analysis.visited_results,
             &analysis.unvisited_results,
