@@ -19,7 +19,7 @@ impl Default for SearchInput {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, FromForm)]
 pub struct SearchResult {
     pub title: String,
     pub url: String,

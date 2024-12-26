@@ -73,6 +73,20 @@ pub async fn completion_fireworks(
         Ok(resp) => resp,
         Err(e) => return Err(LLMError::RequestError(e)),
     };
+    let status = response.status();
+    if !status.is_success() {
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unable to read error response".to_string());
+        return Err(LLMError::Other(
+            format!(
+                "Fireworks API request failed with status {}: {}",
+                status, error_text
+            )
+            .into(),
+        ));
+    }
 
     let response_body: FireworksResponse = match response.json().await {
         Ok(body) => body,

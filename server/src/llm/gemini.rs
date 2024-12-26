@@ -127,6 +127,20 @@ pub(crate) async fn completion_gemini(
         Ok(resp) => resp,
         Err(e) => return Err(LLMError::RequestError(e)),
     };
+    let status = response.status();
+    if !status.is_success() {
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unable to read error response".to_string());
+        return Err(LLMError::Other(
+            format!(
+                "Gemini API request failed with status {}: {}",
+                status, error_text
+            )
+            .into(),
+        ));
+    }
 
     let response_body: GeminiResponse = match response.json().await {
         Ok(body) => body,

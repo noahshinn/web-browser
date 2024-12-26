@@ -24,7 +24,7 @@ curl -X POST http://localhost:8095/v1/agent_search \
   -H "Content-Type: application/json" \
   -d '{
     "query": "what is sequence parallelism",
-    "strategy": "human"
+    "search_strategy": "human"
   }'
 ```
 
@@ -41,7 +41,7 @@ curl -X POST http://localhost:8095/v1/agent_search \
   -H "Content-Type: application/json" \
   -d '{
     "query": "what is sequence parallelism",
-    "strategy": "parallel"
+    "search_strategy": "parallel"
   }'
 ```
 
@@ -51,6 +51,26 @@ The following strategies are supported:
 - `parallel`: (fast) Searches the web in parallel by visiting all of the results at once and aggregating the results at the end.
 - `sequential`: (slow) Searches the web in sequential by visiting the results one at a time.
 - `parallel_tree`: (hybrid) Builds a dependency tree of the results and auto-optimizes the traversal to process all of the results in parallel while respecting dependencies.
+
+### Query strategies
+
+You can specify the query strategy in the JSON body:
+
+```bash
+curl -X POST http://localhost:8095/v1/agent_search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "what is sequence parallelism",
+    "query_strategy": "single_synthesize"
+  }'
+```
+
+The following query strategies are supported:
+
+- `verbatim`: (default) Uses the original query.
+- `single_synthesize`: (fast) Synthesizes a single query to search.
+- `parallel_synthesize`: (fast) Synthesizes one or more queries to search; visits the results in parallel.
+- `sequential_synthesize`: (slow) Synthesizes one or more queries to search; visits the results sequentially.
 
 ### Number of results to visit
 

@@ -30,11 +30,16 @@ pub use parallel::{parallel_agent_search, ParallelAgentSearchError};
 pub use parallel_tree::{parallel_tree_agent_search, ParallelTreeAgentSearchError};
 pub use sequential::{sequential_agent_search, SequentialAgentSearchError};
 
+use crate::query::{synthesize_queries, QuerySynthesisError};
+
 #[derive(Deserialize, Debug, Clone, FromForm)]
 pub struct SearchInput {
     pub query: String,
+    pub current_search_result: Option<SearchResult>,
     #[serde(default)]
-    pub strategy: Option<AgentSearchStrategy>,
+    pub search_strategy: Option<AgentSearchStrategy>,
+    #[serde(default)]
+    pub query_strategy: Option<QueryStrategy>,
     #[serde(default)]
     pub max_results_to_visit: Option<usize>,
 }
@@ -43,7 +48,9 @@ impl Default for SearchInput {
     fn default() -> Self {
         Self {
             query: String::new(),
-            strategy: Some(AgentSearchStrategy::Human),
+            current_search_result: None,
+            search_strategy: Some(AgentSearchStrategy::Human),
+            query_strategy: Some(QueryStrategy::Verbatim),
             max_results_to_visit: Some(10),
         }
     }
@@ -67,6 +74,24 @@ impl Default for AgentSearchStrategy {
     }
 }
 
+#[derive(Debug, Clone, Deserialize, FromFormField)]
+pub enum QueryStrategy {
+    #[serde(rename = "verbatim")]
+    Verbatim,
+    #[serde(rename = "single_synthesize")]
+    SingleSynthesize,
+    #[serde(rename = "parallel_synthesize")]
+    ParallelSynthesize,
+    #[serde(rename = "sequential_synthesize")]
+    SequentialSynthesize,
+}
+
+impl Default for QueryStrategy {
+    fn default() -> Self {
+        QueryStrategy::Verbatim
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AnalysisDocument {
     pub content: String,
@@ -77,7 +102,7 @@ pub struct AnalysisDocument {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AgentSearchResult {
     pub analysis: AnalysisDocument,
-    pub raw_results: Vec<SearchResult>,
+    pub queries_executed: Vec<String>,
 }
 
 #[derive(Error, Debug)]
@@ -100,7 +125,7 @@ impl Display for AggregationPassError {
 }
 
 #[derive(Error, Debug)]
-pub enum AgentSearchError {
+pub enum AgentSingleSearchError {
     #[error("Human agent search failed: {0}")]
     HumanAgentSearchError(#[from] HumanAgentSearchError),
     #[error("Parallel agent search failed: {0}")]
@@ -111,30 +136,183 @@ pub enum AgentSearchError {
     ParallelTreeAgentSearchError(#[from] ParallelTreeAgentSearchError),
 }
 
+#[derive(Error, Debug)]
+pub enum AgentSearchError {
+    #[error("Query synthesis failed: {0}")]
+    QuerySynthesisError(#[from] QuerySynthesisError),
+    #[error("Agent single search failed: {0}")]
+    SingleSearchError(#[from] AgentSingleSearchError),
+}
+
+pub async fn agent_search_with_query(
+    search_input: &SearchInput,
+    searx_host: &str,
+    searx_port: &str,
+) -> Result<AgentSearchResult, AgentSingleSearchError> {
+    let search_strategy = search_input.search_strategy.clone().unwrap_or_default();
+    match search_strategy {
+        AgentSearchStrategy::Human => human_agent_search(&search_input, searx_host, searx_port)
+            .await
+            .map_err(AgentSingleSearchError::HumanAgentSearchError),
+        AgentSearchStrategy::Parallel => {
+            parallel_agent_search(&search_input, searx_host, searx_port)
+                .await
+                .map_err(AgentSingleSearchError::ParallelAgentSearchError)
+        }
+        AgentSearchStrategy::Sequential => {
+            sequential_agent_search(&search_input, searx_host, searx_port)
+                .await
+                .map_err(AgentSingleSearchError::SequentialAgentSearchError)
+        }
+        AgentSearchStrategy::ParallelTree => {
+            parallel_tree_agent_search(&search_input, searx_host, searx_port)
+                .await
+                .map_err(AgentSingleSearchError::ParallelTreeAgentSearchError)
+        }
+    }
+}
+
 pub async fn agent_search(
     search_input: &SearchInput,
     searx_host: &str,
     searx_port: &str,
 ) -> Result<AgentSearchResult, AgentSearchError> {
-    let strategy = search_input.strategy.clone().unwrap_or_default();
-    match strategy {
-        AgentSearchStrategy::Human => human_agent_search(&search_input, searx_host, searx_port)
-            .await
-            .map_err(AgentSearchError::HumanAgentSearchError),
-        AgentSearchStrategy::Parallel => {
-            parallel_agent_search(&search_input, searx_host, searx_port)
-                .await
-                .map_err(AgentSearchError::ParallelAgentSearchError)
+    let query_strategy = search_input.query_strategy.clone().unwrap_or_default();
+    let search_strategy = search_input.search_strategy.clone().unwrap_or_default();
+    let synthesized_queries = synthesize_queries(&search_input.query, &query_strategy)
+        .await
+        .map_err(|e| AgentSearchError::QuerySynthesisError(e))?;
+    let current_search_result: Option<SearchResult> = search_input.current_search_result.clone();
+    match query_strategy {
+        QueryStrategy::Verbatim => {
+            let query = synthesized_queries.queries.first().unwrap();
+            let modified_input = SearchInput {
+                query: query.clone(),
+                current_search_result: current_search_result.clone(),
+                search_strategy: Some(search_strategy.clone()),
+                query_strategy: None,
+                max_results_to_visit: search_input.max_results_to_visit,
+            };
+            let result =
+                match agent_search_with_query(&modified_input, searx_host, searx_port).await {
+                    Ok(result) => result,
+                    Err(e) => return Err(AgentSearchError::SingleSearchError(e)),
+                };
+            Ok(result)
         }
-        AgentSearchStrategy::Sequential => {
-            sequential_agent_search(&search_input, searx_host, searx_port)
-                .await
-                .map_err(AgentSearchError::SequentialAgentSearchError)
+        QueryStrategy::SingleSynthesize => {
+            let query = synthesized_queries.queries.first().unwrap();
+            let modified_input = SearchInput {
+                query: query.clone(),
+                current_search_result: current_search_result.clone(),
+                search_strategy: Some(search_strategy.clone()),
+                query_strategy: None,
+                max_results_to_visit: search_input.max_results_to_visit,
+            };
+            let result =
+                match agent_search_with_query(&modified_input, searx_host, searx_port).await {
+                    Ok(result) => result,
+                    Err(e) => return Err(AgentSearchError::SingleSearchError(e)),
+                };
+            Ok(result)
         }
-        AgentSearchStrategy::ParallelTree => {
-            parallel_tree_agent_search(&search_input, searx_host, searx_port)
-                .await
-                .map_err(AgentSearchError::ParallelTreeAgentSearchError)
+        QueryStrategy::ParallelSynthesize => {
+            let tasks = synthesized_queries.queries.iter().map(|query| {
+                let query = query.clone();
+                let current_search_result = current_search_result.clone();
+                let search_strategy = search_strategy.clone();
+                let max_results_to_visit = search_input.max_results_to_visit;
+                let searx_host = searx_host.to_string();
+                let searx_port = searx_port.to_string();
+
+                tokio::spawn(async move {
+                    let modified_input = SearchInput {
+                        query: query,
+                        current_search_result: current_search_result,
+                        search_strategy: Some(search_strategy),
+                        query_strategy: None,
+                        max_results_to_visit: max_results_to_visit,
+                    };
+                    agent_search_with_query(&modified_input, &searx_host, &searx_port).await
+                })
+            });
+            let join_results = futures::future::join_all(tasks).await;
+            let mut results = Vec::new();
+            for join_result in join_results {
+                match join_result {
+                    Ok(search_result) => match search_result {
+                        Ok(result) => results.push(result),
+                        Err(e) => return Err(AgentSearchError::SingleSearchError(e)),
+                    },
+                    Err(e) => {
+                        return Err(AgentSearchError::SingleSearchError(
+                            AgentSingleSearchError::ParallelAgentSearchError(
+                                ParallelAgentSearchError::JoinError(e),
+                            ),
+                        ))
+                    }
+                }
+            }
+            let mut analysis = AnalysisDocument {
+                content: String::new(),
+                visited_results: Vec::new(),
+                unvisited_results: Vec::new(),
+            };
+            let mut queries_executed = Vec::new();
+            for res in results {
+                if analysis.content.is_empty() {
+                    analysis = res.analysis;
+                } else {
+                    analysis = AnalysisDocument {
+                        content: format!("{}\n\n{}", analysis.content, res.analysis.content),
+                        visited_results: analysis
+                            .visited_results
+                            .clone()
+                            .into_iter()
+                            .chain(res.analysis.visited_results.clone().into_iter())
+                            .collect(),
+                        unvisited_results: analysis
+                            .unvisited_results
+                            .clone()
+                            .into_iter()
+                            .chain(res.analysis.unvisited_results.clone().into_iter())
+                            .collect(),
+                    };
+                }
+                queries_executed.extend(res.queries_executed);
+            }
+            Ok(AgentSearchResult {
+                analysis,
+                queries_executed: queries_executed,
+            })
+        }
+        QueryStrategy::SequentialSynthesize => {
+            let mut cur_result: Option<AgentSearchResult> = None;
+            for query in synthesized_queries.queries {
+                let modified_input = SearchInput {
+                    query: query.clone(),
+                    current_search_result: current_search_result.clone(),
+                    search_strategy: Some(search_strategy.clone()),
+                    query_strategy: None,
+                    max_results_to_visit: search_input.max_results_to_visit,
+                };
+                let iter_result =
+                    match agent_search_with_query(&modified_input, searx_host, searx_port).await {
+                        Ok(result) => result,
+                        Err(e) => return Err(AgentSearchError::SingleSearchError(e)),
+                    };
+                cur_result = Some(AgentSearchResult {
+                    analysis: iter_result.analysis,
+                    queries_executed: cur_result
+                        .unwrap()
+                        .queries_executed
+                        .iter()
+                        .chain(iter_result.queries_executed.iter())
+                        .cloned()
+                        .collect(),
+                });
+            }
+            Ok(cur_result.unwrap())
         }
     }
 }
@@ -208,8 +386,6 @@ pub async fn visit_and_parse_webpage(url: &str) -> Result<ParsedWebpage, Webpage
         .map_err(|e| WebpageParseError::FetchError(e))?;
 
     let dom_text = dom_parse_webpage(&webpage_text)?;
-    // let semantic_text = semantic_parse_webpage(&dom_text).await?;
-    // trim the leading and trailing whitespace
     let trimmed_text = dom_text.content.trim();
     Ok(ParsedWebpage {
         original_content: dom_text.original_content,
@@ -374,7 +550,7 @@ pub async fn parallel_visit_and_extract_relevant_info(
                 visited_results: search_results.to_vec(),
                 unvisited_results: Vec::new(),
             },
-            raw_results: search_results.to_vec(),
+            queries_executed: vec![query.to_string()],
         },
         Err(e) => return Err(ParallelAgentSearchError::AggregationPassError(e)),
     };

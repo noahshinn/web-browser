@@ -75,6 +75,6 @@ pub async fn sequential_agent_search(
     }
     Ok(AgentSearchResult {
         analysis,
-        raw_results: search_result,
+        queries_executed: vec![search_input.query.clone()],
     })
 }

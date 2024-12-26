@@ -1,14 +1,39 @@
 use crate::search::SearchResult;
 use regex::Regex;
 use serde::de::DeserializeOwned;
+use std::fmt::Display;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum ParseMarkdownCodeBlockError {
-    #[error("No matching markdown code blocks found in response: {0}")]
-    NoMatchingMarkdownCodeBlocksFound(String),
-    #[error("Failed to parse JSON: {0}")]
-    ParseJsonError(#[from] serde_json::Error),
+pub struct ParseMarkdownCodeBlockError {
+    pub message: String,
+    pub original_response: String,
+}
+
+impl Display for ParseMarkdownCodeBlockError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "No matching markdown code blocks found in response: {}. Original response: {}",
+            self.message, self.original_response
+        )
+    }
+}
+
+#[derive(Error, Debug)]
+pub struct ParseJsonError {
+    pub message: String,
+    pub original_response: String,
+}
+
+impl Display for ParseJsonError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Failed to parse JSON: {}. Original response: {}",
+            self.message, self.original_response
+        )
+    }
 }
 
 pub fn parse_markdown_code_block(
@@ -20,7 +45,6 @@ pub fn parse_markdown_code_block(
     for cap in re.captures_iter(content) {
         let block_language = cap.get(1).map_or("", |m| m.as_str());
         let parsed_content = cap.get(2).map_or("", |m| m.as_str()).trim();
-
         if language.is_none() {
             return Ok(parsed_content.to_string());
         }
@@ -29,9 +53,10 @@ pub fn parse_markdown_code_block(
         }
     }
     if valid_results.is_empty() {
-        return Err(
-            ParseMarkdownCodeBlockError::NoMatchingMarkdownCodeBlocksFound(content.to_string()),
-        );
+        return Err(ParseMarkdownCodeBlockError {
+            message: "No matching markdown code blocks found in response".to_string(),
+            original_response: content.to_string(),
+        });
     }
     Ok(valid_results.last().unwrap().to_string())
 }
@@ -62,12 +87,23 @@ pub fn display_search_results_with_indices(results: &[SearchResult]) -> String {
         .join("\n\n")
 }
 
-pub fn parse_json_response<T: DeserializeOwned>(
-    completion: &str,
-) -> Result<T, ParseMarkdownCodeBlockError> {
-    let json_string = parse_markdown_code_block(completion, Some("json"))?;
-    let parsed = serde_json::from_str(&json_string)?;
-    Ok(parsed)
+pub fn parse_json_response<T: DeserializeOwned>(completion: &str) -> Result<T, ParseJsonError> {
+    let response = match parse_markdown_code_block(completion, Some("json")) {
+        Ok(response) => response,
+        Err(e) => {
+            return Err(ParseJsonError {
+                message: e.to_string(),
+                original_response: completion.to_string(),
+            })
+        }
+    };
+    match serde_json::from_str(&response) {
+        Ok(parsed) => Ok(parsed),
+        Err(e) => Err(ParseJsonError {
+            message: e.to_string(),
+            original_response: completion.to_string(),
+        }),
+    }
 }
 
 pub fn enforce_n_sequential_newlines(text: &str, n: usize) -> String {

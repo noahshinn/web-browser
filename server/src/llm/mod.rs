@@ -32,6 +32,12 @@ pub enum Provider {
     Custom,
 }
 
+impl Default for Provider {
+    fn default() -> Self {
+        Provider::Anthropic
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Model {
     GPT4o,
@@ -48,6 +54,12 @@ pub enum Model {
     Llama32Instruct70B,
     Llama32Instruct405B,
     Custom,
+}
+
+impl Default for Model {
+    fn default() -> Self {
+        Model::Claude35Sonnet
+    }
 }
 
 impl fmt::Display for Model {
@@ -194,4 +206,6 @@ pub enum LLMError {
     ParseError(String),
     #[error("LLM response is empty")]
     EmptyResponse,
+    #[error("Other error: {0}")]
+    Other(String),
 }

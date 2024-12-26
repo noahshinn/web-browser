@@ -6,12 +6,12 @@ use std::env;
 const ANTHROPIC_API_URL: &str = "https://api.anthropic.com/v1/messages";
 const DEFAULT_ANTHROPIC_MAX_COMPLETION_TOKENS: i32 = 8192;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct AnthropicResponse {
     content: Vec<AnthropicContent>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct AnthropicContent {
     text: String,
 }
@@ -82,6 +82,21 @@ pub async fn completion_anthropic(
         Ok(resp) => resp,
         Err(e) => return Err(LLMError::RequestError(e)),
     };
+
+    let status = response.status();
+    if !status.is_success() {
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unable to read error response".to_string());
+        return Err(LLMError::Other(
+            format!(
+                "Anthropic API request failed with status {}: {}",
+                status, error_text
+            )
+            .into(),
+        ));
+    }
 
     let response_body: AnthropicResponse = match response.json().await {
         Ok(body) => body,

@@ -147,3 +147,41 @@ Respond with a JSON object in a markdown code block:
 Each number represents the index of a search result in the input list."#
     )
 }
+
+pub const GENERATE_SINGLE_QUERY_SYSTEM_PROMPT: &str = r#"# Task
+You will be given a natural language request from a user. Your task is to generate a Google search query that will help find the most relevant information to answer the question.
+First, write a reasoning trace, then write the search query. Brainstorm the best place to find the information you need. Your query should search for specific sites, documents, or other information.
+
+## Format
+Respond with a JSON object in a markdown code block in the following format:
+
+```json
+{"reasoning": "the reasoning trace for brainstorming the best query based on the likely location of the information", "query": "the search query"}
+```"#;
+
+pub const GENERATE_PARALLEL_QUERIES_SYSTEM_PROMPT: &str = r#"# Task
+You will be given a natural language request from a user. Your task is to generate a list of one or more Google search queries that are required to find the most relevant information to answer the question.
+These queries will be searched in parallel and the results will be aggregated at the end.
+Most of the time, only one query will be needed.
+First, write a reasoning trace, then write the search queries. Brainstorm the best places to find the information you need. Your queries should search for specific sites, documents, or other pieces of information.
+
+## Format
+Respond with a JSON object in a markdown code block in the following format:
+
+```json
+{"reasoning": "the reasoning trace for brainstorming the best queries based on the likely locations of the information", "queries": ["query1", "query2", ...]}
+```"#;
+
+pub const GENERATE_SEQUENTIAL_QUERIES_SYSTEM_PROMPT: &str = r#"# Task
+You will be given a natural language request from a user. Your task is to generate a list of one or more Google search queries that are required to find the most relevant information to answer the question.
+These queries will be searched in sequence, so write them accordingly.
+For example, if information from the first query is necessary to answer the second query, write the first query first and then the second query.
+Most of the time, only one query will be needed.
+First, write a reasoning trace, then write the search queries. Brainstorm the best places to find the information you need. Your queries should search for specific sites, documents, or other pieces of information.
+
+## Format
+Respond with a JSON object in a markdown code block in the following format:
+
+```json
+{"reasoning": "the reasoning trace for brainstorming the best queries based on the likely locations of the information", "queries": ["query1", "query2", ...]}
+```"#;

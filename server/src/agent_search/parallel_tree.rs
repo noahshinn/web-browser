@@ -141,6 +141,6 @@ pub async fn parallel_tree_agent_search(
             visited_results,
             unvisited_results: Vec::new(),
         },
-        raw_results: search_results,
+        queries_executed: vec![search_input.query.clone()],
     })
 }
