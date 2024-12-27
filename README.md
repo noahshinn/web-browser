@@ -61,20 +61,54 @@ curl -X POST http://localhost:8095/v1/agent_search \
   -H "Content-Type: application/json" \
   -d '{
     "query": "what is sequence parallelism",
-    "query_strategy": "single_synthesize"
+    "query_strategy": "single"
   }'
 ```
 
 The following query strategies are supported:
 
 - `verbatim`: (default) Uses the original query.
-- `single_synthesize`: (fast) Synthesizes a single query to search.
-- `parallel_synthesize`: (fast) Synthesizes one or more queries to search; visits the results in parallel.
-- `sequential_synthesize`: (slow) Synthesizes one or more queries to search; visits the results sequentially.
+- `single`: (fast) Synthesizes a single query to search.
+- `parallel`: (fast) Synthesizes one or more queries to search; visits the results in parallel.
+- `sequential`: (slow) Synthesizes one or more queries to search; visits the results sequentially.
 
 ### Number of results to visit
 
 You can specify the number of results to visit with the `max_results_to_visit` field in the JSON body (default is 10).
+
+### Result format
+
+You can specify the result format with the `result_format` field in the JSON body. The following formats are supported:
+
+- `answer`: (default) Formats the result as an answer.
+- `research_summary`: Formats the result as a research summary.
+- `faq_article`: Formats the result as a FAQ article.
+- `news_article`: Formats the result as a news article.
+- `webpage`: Formats the result as a webpage.
+- `custom`: Formats the result as a custom format according to the custom format description.
+
+For example, to format the result as a research summary, you can run the following command:
+
+```bash
+curl -X POST http://localhost:8095/v1/agent_search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "what is sequence parallelism",
+    "result_format": "research_summary"
+  }'
+```
+
+To format the result as a custom format (such as a markdown table), you can run the following command:
+
+```bash
+curl -X POST http://localhost:8095/v1/agent_search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "what is the founding date of each of the top 10 market cap companies in the world",
+    "result_format": "custom",
+    "custom_result_format_description": "Format the results as a markdown table with the following columns: Company Name, Founding Date"
+  }'
+```
 
 ## Development
 

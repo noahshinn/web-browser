@@ -4,8 +4,8 @@ use thiserror::Error;
 
 use crate::agent_search::{
     check_sufficient_information, visit_and_extract_relevant_info, AgentSearchInput,
-    AgentSearchResult, AnalysisDocument, LLMError, SearchResult, SufficientInformationCheckError,
-    VisitAndExtractRelevantInfoError,
+    AnalysisDocument, LLMError, PreFormattedAgentSearchResult, SearchResult,
+    SufficientInformationCheckError, VisitAndExtractRelevantInfoError,
 };
 use crate::llm::{CompletionBuilder, Model, Provider};
 use crate::prompts::{build_select_next_result_system_prompt, Prompt};
@@ -70,7 +70,7 @@ pub async fn human_agent_search(
     search_input: &AgentSearchInput,
     searx_host: &str,
     searx_port: &str,
-) -> Result<AgentSearchResult, HumanAgentSearchError> {
+) -> Result<PreFormattedAgentSearchResult, HumanAgentSearchError> {
     let search_result = match search(
         &search::SearchInput {
             query: search_input.query.clone(),
@@ -127,8 +127,8 @@ pub async fn human_agent_search(
             Err(e) => return Err(HumanAgentSearchError::SufficientInformationCheckError(e)),
         }
     }
-    Ok(AgentSearchResult {
-        analysis,
+    Ok(PreFormattedAgentSearchResult {
+        raw_analysis: analysis,
         queries_executed: vec![search_input.query.clone()],
     })
 }

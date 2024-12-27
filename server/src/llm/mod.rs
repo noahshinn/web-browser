@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use thiserror::Error;
+
 pub mod anthropic;
 pub mod custom;
 pub mod fireworks;
@@ -23,12 +24,17 @@ pub struct Message {
     pub content: String,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Provider {
+    #[serde(rename = "openai")]
     OpenAI,
+    #[serde(rename = "anthropic")]
     Anthropic,
+    #[serde(rename = "google")]
     Google,
+    #[serde(rename = "fireworks")]
     Fireworks,
+    #[serde(rename = "custom")]
     Custom,
 }
 

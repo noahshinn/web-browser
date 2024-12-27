@@ -6,6 +6,7 @@ pub mod handlers;
 pub mod llm;
 pub mod prompts;
 pub mod query;
+pub mod result_format;
 pub mod search;
 pub mod server;
 pub mod utils;

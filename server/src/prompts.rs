@@ -105,7 +105,8 @@ Respond with a JSON object in a markdown code block in the following format:
 {{
     "sufficient": <true or false>
 }}
-```"#
+```
+"#
     )
 }
 
@@ -156,8 +157,12 @@ First, write a reasoning trace, then write the search query. Brainstorm the best
 Respond with a JSON object in a markdown code block in the following format:
 
 ```json
-{"reasoning": "the reasoning trace for brainstorming the best query based on the likely location of the information", "query": "the search query"}
-```"#;
+{
+    "reasoning": "the reasoning trace for brainstorming the best query based on the likely location of the information",
+    "query": "the search query"
+}
+```
+"#;
 
 pub const GENERATE_PARALLEL_QUERIES_SYSTEM_PROMPT: &str = r#"# Task
 You will be given a natural language request from a user. Your task is to generate a list of one or more Google search queries that are required to find the most relevant information to answer the question.
@@ -169,8 +174,12 @@ First, write a reasoning trace, then write the search queries. Brainstorm the be
 Respond with a JSON object in a markdown code block in the following format:
 
 ```json
-{"reasoning": "the reasoning trace for brainstorming the best queries based on the likely locations of the information", "queries": ["query1", "query2", ...]}
-```"#;
+{
+    "reasoning": "the reasoning trace for brainstorming the best queries based on the likely locations of the information",
+    "queries": ["query1", "query2", ...]
+}
+```
+"#;
 
 pub const GENERATE_SEQUENTIAL_QUERIES_SYSTEM_PROMPT: &str = r#"# Task
 You will be given a natural language request from a user. Your task is to generate a list of one or more Google search queries that are required to find the most relevant information to answer the question.
@@ -183,5 +192,62 @@ First, write a reasoning trace, then write the search queries. Brainstorm the be
 Respond with a JSON object in a markdown code block in the following format:
 
 ```json
-{"reasoning": "the reasoning trace for brainstorming the best queries based on the likely locations of the information", "queries": ["query1", "query2", ...]}
-```"#;
+{
+    "reasoning": "the reasoning trace for brainstorming the best queries based on the likely locations of the information",
+    "queries": ["query1", "query2", ...]
+}
+```
+"#;
+
+pub const RESULT_FORMAT_ANSWER_SYSTEM_PROMPT: &str = r#"# Task
+You will be given a search query and a list of search results.
+Your task is to answer the query based on the search results.
+
+## Format
+Your response will be directly used as the answer. Make it concise and to the point."#;
+
+pub const RESULT_FORMAT_RESEARCH_SUMMARY_SYSTEM_PROMPT: &str = r#"# Task
+You will be given a search query and a list of search results.
+Your task is to write a research summary of the search results.
+
+## Format
+Your response will be directly used as the research summary. Write it in markdown."#;
+
+pub const RESULT_FORMAT_FAQ_SYSTEM_PROMPT: &str = r#"# Task
+You will be given a search query and a list of search results.
+Your task is to write a FAQ article based on the search results.
+
+## Format
+Your response will be directly used as the FAQ article. Write it in markdown in the following form:
+
+# <question>
+<answer>
+"#;
+
+pub const RESULT_FORMAT_NEWS_ARTICLE_SYSTEM_PROMPT: &str = r#"# Task
+You will be given a search query and a list of search results.
+Your task is to write a news article based on the search results.
+
+## Format
+Your response will be directly used as the news article. Write it in markdown in the following form:
+
+# <title>
+<body>
+"#;
+
+pub const RESULT_FORMAT_WEBPAGE_SYSTEM_PROMPT: &str = r#"# Task
+You will be given a search query and a list of search results.
+Your task is to write a webpage based on the search results.
+
+## Format
+Your response will be directly used as the webpage. Write it in html in the following form:
+
+<html>
+[content]
+<html>
+"#;
+
+pub const RESULT_FORMAT_CUSTOM_SYSTEM_PROMPT: &str = r#"# Task
+You will be given a search query and a list of search results.
+Your task is to write a response according to the custom format description.
+"#;

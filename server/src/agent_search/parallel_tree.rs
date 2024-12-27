@@ -1,7 +1,7 @@
 use crate::agent_search::VisitAndExtractRelevantInfoError;
 use crate::agent_search::{
-    parallel_visit_and_extract_relevant_info, AgentSearchInput, AgentSearchResult,
-    AnalysisDocument, SearchResult,
+    parallel_visit_and_extract_relevant_info, AgentSearchInput, AnalysisDocument,
+    PreFormattedAgentSearchResult, SearchResult,
 };
 use crate::llm::{CompletionBuilder, LLMError, Model, Provider};
 use crate::prompts::{build_dependency_tree_system_prompt, Prompt};
@@ -95,14 +95,14 @@ async fn process_level(
             Ok(result) => result,
             Err(e) => return Err(ParallelTreeAgentSearchError::ParallelAgentSearchError(e)),
         };
-    Ok(aggregated_result.analysis.content)
+    Ok(aggregated_result.raw_analysis.content)
 }
 
 pub async fn parallel_tree_agent_search(
     search_input: &AgentSearchInput,
     searx_host: &str,
     searx_port: &str,
-) -> Result<AgentSearchResult, ParallelTreeAgentSearchError> {
+) -> Result<PreFormattedAgentSearchResult, ParallelTreeAgentSearchError> {
     let search_results = match search(
         &search::SearchInput {
             query: search_input.query.clone(),
@@ -135,8 +135,8 @@ pub async fn parallel_tree_agent_search(
         visited_results.extend(level.iter().map(|&idx| search_results[idx].clone()));
     }
 
-    Ok(AgentSearchResult {
-        analysis: AnalysisDocument {
+    Ok(PreFormattedAgentSearchResult {
+        raw_analysis: AnalysisDocument {
             content: current_analysis,
             visited_results,
             unvisited_results: Vec::new(),

@@ -5,6 +5,9 @@ use crate::prompts::{
     AGGREGATE_WEB_SEARCH_FINDINGS_PROMPT, WEB_SEARCH_USE_SAME_WEB_SEARCH_FINDINGS_DOCUMENT,
 };
 use crate::query::QueryStrategy;
+use crate::result_format::{
+    format_result, AnalysisDocument, ResultFormat, ResultFormatError, ResultFormatResponse,
+};
 use crate::search::SearchResult;
 use crate::utils::{display_search_results_with_indices, parse_json_response};
 use crate::webpage_parse::{visit_and_parse_webpage, WebpageParseError};
@@ -39,6 +42,10 @@ pub struct AgentSearchInput {
     pub query_strategy: Option<QueryStrategy>,
     #[serde(default)]
     pub max_results_to_visit: Option<usize>,
+    #[serde(default)]
+    pub result_format: Option<ResultFormat>,
+    #[serde(default)]
+    pub custom_result_format_description: Option<String>,
 }
 
 impl Default for AgentSearchInput {
@@ -46,9 +53,11 @@ impl Default for AgentSearchInput {
         Self {
             query: String::new(),
             current_search_result: None,
-            search_strategy: Some(AgentSearchStrategy::Human),
-            query_strategy: Some(QueryStrategy::Verbatim),
+            search_strategy: Some(AgentSearchStrategy::default()),
+            query_strategy: Some(QueryStrategy::default()),
             max_results_to_visit: Some(10),
+            result_format: Some(ResultFormat::default()),
+            custom_result_format_description: None,
         }
     }
 }
@@ -72,15 +81,15 @@ impl Default for AgentSearchStrategy {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct AnalysisDocument {
-    pub content: String,
-    pub visited_results: Vec<SearchResult>,
-    pub unvisited_results: Vec<SearchResult>,
+pub struct AgentSearchResult {
+    pub raw_analysis: AnalysisDocument,
+    pub queries_executed: Vec<String>,
+    pub response: ResultFormatResponse,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct AgentSearchResult {
-    pub analysis: AnalysisDocument,
+pub struct PreFormattedAgentSearchResult {
+    pub raw_analysis: AnalysisDocument,
     pub queries_executed: Vec<String>,
 }
 
@@ -121,13 +130,15 @@ pub enum AgentSearchError {
     QuerySynthesisError(#[from] QuerySynthesisError),
     #[error("Agent single search failed: {0}")]
     SingleSearchError(#[from] AgentSingleSearchError),
+    #[error("Result format failed: {0}")]
+    ResultFormatError(#[from] ResultFormatError),
 }
 
 pub async fn agent_search_with_query(
     search_input: &AgentSearchInput,
     searx_host: &str,
     searx_port: &str,
-) -> Result<AgentSearchResult, AgentSingleSearchError> {
+) -> Result<PreFormattedAgentSearchResult, AgentSingleSearchError> {
     let search_strategy = search_input.search_strategy.clone().unwrap_or_default();
     match search_strategy {
         AgentSearchStrategy::Human => human_agent_search(&search_input, searx_host, searx_port)
@@ -162,8 +173,8 @@ pub async fn agent_search(
         .await
         .map_err(|e| AgentSearchError::QuerySynthesisError(e))?;
     let current_search_result: Option<SearchResult> = search_input.current_search_result.clone();
-    match query_strategy {
-        QueryStrategy::Verbatim => {
+    let pre_formatted_result: PreFormattedAgentSearchResult = match query_strategy {
+        QueryStrategy::Verbatim | QueryStrategy::Single => {
             let query = synthesized_queries.queries.first().unwrap();
             let modified_input = AgentSearchInput {
                 query: query.clone(),
@@ -171,46 +182,91 @@ pub async fn agent_search(
                 search_strategy: Some(search_strategy.clone()),
                 query_strategy: None,
                 max_results_to_visit: search_input.max_results_to_visit,
+                result_format: search_input.result_format.clone(),
+                custom_result_format_description: search_input
+                    .custom_result_format_description
+                    .clone(),
             };
-            let result =
+            let pre_formatted_result =
                 match agent_search_with_query(&modified_input, searx_host, searx_port).await {
                     Ok(result) => result,
                     Err(e) => return Err(AgentSearchError::SingleSearchError(e)),
                 };
-            Ok(result)
+            pre_formatted_result
         }
-        QueryStrategy::SingleSynthesize => {
-            let query = synthesized_queries.queries.first().unwrap();
-            let modified_input = AgentSearchInput {
-                query: query.clone(),
-                current_search_result: current_search_result.clone(),
-                search_strategy: Some(search_strategy.clone()),
-                query_strategy: None,
-                max_results_to_visit: search_input.max_results_to_visit,
+        QueryStrategy::Sequential => {
+            let mut cur_analysis = AnalysisDocument {
+                content: String::new(),
+                visited_results: Vec::new(),
+                unvisited_results: Vec::new(),
             };
-            let result =
-                match agent_search_with_query(&modified_input, searx_host, searx_port).await {
-                    Ok(result) => result,
-                    Err(e) => return Err(AgentSearchError::SingleSearchError(e)),
+            let mut queries_executed = Vec::new();
+
+            for query in synthesized_queries.queries {
+                let modified_input = AgentSearchInput {
+                    query: query.clone(),
+                    current_search_result: current_search_result.clone(),
+                    search_strategy: Some(search_strategy.clone()),
+                    query_strategy: None,
+                    max_results_to_visit: search_input.max_results_to_visit,
+                    result_format: search_input.result_format.clone(),
+                    custom_result_format_description: search_input
+                        .custom_result_format_description
+                        .clone(),
                 };
-            Ok(result)
+                let iter_result =
+                    match agent_search_with_query(&modified_input, searx_host, searx_port).await {
+                        Ok(result) => result,
+                        Err(e) => return Err(AgentSearchError::SingleSearchError(e)),
+                    };
+
+                if cur_analysis.content.is_empty() {
+                    cur_analysis = iter_result.raw_analysis;
+                } else {
+                    cur_analysis = AnalysisDocument {
+                        content: format!(
+                            "{}\n\n{}",
+                            cur_analysis.content, iter_result.raw_analysis.content
+                        ),
+                        visited_results: cur_analysis
+                            .visited_results
+                            .into_iter()
+                            .chain(iter_result.raw_analysis.visited_results.into_iter())
+                            .collect(),
+                        unvisited_results: cur_analysis
+                            .unvisited_results
+                            .into_iter()
+                            .chain(iter_result.raw_analysis.unvisited_results.into_iter())
+                            .collect(),
+                    };
+                }
+                queries_executed.extend(iter_result.queries_executed);
+            }
+            PreFormattedAgentSearchResult {
+                raw_analysis: cur_analysis,
+                queries_executed,
+            }
         }
-        QueryStrategy::ParallelSynthesize => {
+        QueryStrategy::Parallel => {
             let tasks = synthesized_queries.queries.iter().map(|query| {
                 let query = query.clone();
                 let current_search_result = current_search_result.clone();
                 let search_strategy = search_strategy.clone();
                 let max_results_to_visit = search_input.max_results_to_visit;
+                let result_format = search_input.result_format.clone();
                 let searx_host = searx_host.to_string();
                 let searx_port = searx_port.to_string();
-
+                let custom_result_format_description =
+                    search_input.custom_result_format_description.clone();
                 tokio::spawn(async move {
                     let modified_input = AgentSearchInput {
-                        query: query,
-                        current_search_result: current_search_result,
+                        query,
+                        current_search_result,
                         search_strategy: Some(search_strategy),
                         query_strategy: None,
-                        max_results_to_visit: max_results_to_visit,
+                        max_results_to_visit,
+                        result_format,
+                        custom_result_format_description,
                     };
                     agent_search_with_query(&modified_input, &searx_host, &searx_port).await
                 })
@@ -232,68 +288,60 @@ pub async fn agent_search(
                     }
                 }
             }
-            let mut analysis = AnalysisDocument {
+            let mut cur_analysis = AnalysisDocument {
                 content: String::new(),
                 visited_results: Vec::new(),
                 unvisited_results: Vec::new(),
             };
             let mut queries_executed = Vec::new();
             for res in results {
-                if analysis.content.is_empty() {
-                    analysis = res.analysis;
+                if cur_analysis.content.is_empty() {
+                    cur_analysis = res.raw_analysis;
                 } else {
-                    analysis = AnalysisDocument {
-                        content: format!("{}\n\n{}", analysis.content, res.analysis.content),
-                        visited_results: analysis
+                    cur_analysis = AnalysisDocument {
+                        content: format!(
+                            "{}\n\n{}",
+                            cur_analysis.content, res.raw_analysis.content
+                        ),
+                        visited_results: cur_analysis
                             .visited_results
                             .clone()
                             .into_iter()
-                            .chain(res.analysis.visited_results.clone().into_iter())
+                            .chain(res.raw_analysis.visited_results.clone().into_iter())
                             .collect(),
-                        unvisited_results: analysis
+                        unvisited_results: cur_analysis
                             .unvisited_results
                             .clone()
                             .into_iter()
-                            .chain(res.analysis.unvisited_results.clone().into_iter())
+                            .chain(res.raw_analysis.unvisited_results.clone().into_iter())
                             .collect(),
                     };
                 }
                 queries_executed.extend(res.queries_executed);
             }
-            Ok(AgentSearchResult {
-                analysis,
-                queries_executed: queries_executed,
-            })
-        }
-        QueryStrategy::SequentialSynthesize => {
-            let mut cur_result: Option<AgentSearchResult> = None;
-            for query in synthesized_queries.queries {
-                let modified_input = AgentSearchInput {
-                    query: query.clone(),
-                    current_search_result: current_search_result.clone(),
-                    search_strategy: Some(search_strategy.clone()),
-                    query_strategy: None,
-                    max_results_to_visit: search_input.max_results_to_visit,
-                };
-                let iter_result =
-                    match agent_search_with_query(&modified_input, searx_host, searx_port).await {
-                        Ok(result) => result,
-                        Err(e) => return Err(AgentSearchError::SingleSearchError(e)),
-                    };
-                cur_result = Some(AgentSearchResult {
-                    analysis: iter_result.analysis,
-                    queries_executed: cur_result
-                        .unwrap()
-                        .queries_executed
-                        .iter()
-                        .chain(iter_result.queries_executed.iter())
-                        .cloned()
-                        .collect(),
-                });
+            PreFormattedAgentSearchResult {
+                raw_analysis: cur_analysis,
+                queries_executed,
             }
-            Ok(cur_result.unwrap())
         }
-    }
+    };
+    let result_format = search_input.result_format.clone().unwrap_or_default();
+    let response = match format_result(
+        &search_input.query,
+        &pre_formatted_result.raw_analysis,
+        &result_format,
+        search_input.custom_result_format_description.as_deref(),
+    )
+    .await
+    {
+        Ok(response) => response,
+        Err(e) => return Err(AgentSearchError::ResultFormatError(e)),
+    };
+    Ok(AgentSearchResult {
+        raw_analysis: pre_formatted_result.raw_analysis,
+        queries_executed: pre_formatted_result.queries_executed,
+        response,
+    })
 }
 
 async fn visit_and_extract_relevant_info(
@@ -381,7 +429,7 @@ pub async fn parallel_visit_and_extract_relevant_info(
     query: &str,
     search_results: &[SearchResult],
     current_analysis: &str,
-) -> Result<AgentSearchResult, ParallelAgentSearchError> {
+) -> Result<PreFormattedAgentSearchResult, ParallelAgentSearchError> {
     let extraction_tasks = search_results
         .iter()
         .map(|result| {
@@ -409,8 +457,8 @@ pub async fn parallel_visit_and_extract_relevant_info(
         })
         .collect::<Result<Vec<_>, _>>()?;
     let aggregated_result = match aggregate_results(query, extraction_results).await {
-        Ok(result) => AgentSearchResult {
-            analysis: AnalysisDocument {
+        Ok(result) => PreFormattedAgentSearchResult {
+            raw_analysis: AnalysisDocument {
                 content: result,
                 visited_results: search_results.to_vec(),
                 unvisited_results: Vec::new(),

@@ -12,12 +12,12 @@ use thiserror::Error;
 pub enum QueryStrategy {
     #[serde(rename = "verbatim")]
     Verbatim,
-    #[serde(rename = "single_synthesize")]
-    SingleSynthesize,
-    #[serde(rename = "parallel_synthesize")]
-    ParallelSynthesize,
-    #[serde(rename = "sequential_synthesize")]
-    SequentialSynthesize,
+    #[serde(rename = "single")]
+    Single,
+    #[serde(rename = "parallel")]
+    Parallel,
+    #[serde(rename = "sequential")]
+    Sequential,
 }
 
 impl Default for QueryStrategy {
@@ -130,7 +130,7 @@ pub async fn synthesize_queries(
             reasoning: "".to_string(),
             queries: vec![original_query.to_string()],
         }),
-        QueryStrategy::SingleSynthesize => {
+        QueryStrategy::Single => {
             let query = match generate_single_query(original_query).await {
                 Ok(query) => query,
                 Err(e) => return Err(e),
@@ -140,14 +140,14 @@ pub async fn synthesize_queries(
                 queries: vec![query.query],
             })
         }
-        QueryStrategy::ParallelSynthesize => {
+        QueryStrategy::Parallel => {
             let queries = match generate_parallel_queries(original_query).await {
                 Ok(queries) => queries,
                 Err(e) => return Err(e),
             };
             Ok(queries)
         }
-        QueryStrategy::SequentialSynthesize => {
+        QueryStrategy::Sequential => {
             let queries = match generate_sequential_queries(original_query).await {
                 Ok(queries) => queries,
                 Err(e) => return Err(e),

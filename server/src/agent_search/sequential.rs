@@ -1,6 +1,6 @@
 use crate::agent_search::{
     check_sufficient_information, visit_and_extract_relevant_info, AgentSearchInput,
-    AgentSearchResult, AnalysisDocument, SufficientInformationCheckError,
+    AnalysisDocument, PreFormattedAgentSearchResult, SufficientInformationCheckError,
     VisitAndExtractRelevantInfoError,
 };
 use crate::search;
@@ -21,7 +21,7 @@ pub async fn sequential_agent_search(
     search_input: &AgentSearchInput,
     searx_host: &str,
     searx_port: &str,
-) -> Result<AgentSearchResult, SequentialAgentSearchError> {
+) -> Result<PreFormattedAgentSearchResult, SequentialAgentSearchError> {
     let search_result = match search(
         &search::SearchInput {
             query: search_input.query.clone(),
@@ -73,8 +73,8 @@ pub async fn sequential_agent_search(
             }
         }
     }
-    Ok(AgentSearchResult {
-        analysis,
+    Ok(PreFormattedAgentSearchResult {
+        raw_analysis: analysis,
         queries_executed: vec![search_input.query.clone()],
     })
 }
