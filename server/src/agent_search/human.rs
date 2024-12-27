@@ -3,8 +3,8 @@ use std::fmt::Display;
 use thiserror::Error;
 
 use crate::agent_search::{
-    check_sufficient_information, visit_and_extract_relevant_info, AgentSearchResult,
-    AnalysisDocument, LLMError, SearchInput, SearchResult, SufficientInformationCheckError,
+    check_sufficient_information, visit_and_extract_relevant_info, AgentSearchInput,
+    AgentSearchResult, AnalysisDocument, LLMError, SearchResult, SufficientInformationCheckError,
     VisitAndExtractRelevantInfoError,
 };
 use crate::llm::{CompletionBuilder, Model, Provider};
@@ -67,7 +67,7 @@ async fn select_next_result(
 }
 
 pub async fn human_agent_search(
-    search_input: &SearchInput,
+    search_input: &AgentSearchInput,
     searx_host: &str,
     searx_port: &str,
 ) -> Result<AgentSearchResult, HumanAgentSearchError> {

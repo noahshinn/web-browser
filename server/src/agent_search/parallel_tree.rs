@@ -1,7 +1,7 @@
 use crate::agent_search::VisitAndExtractRelevantInfoError;
 use crate::agent_search::{
-    parallel_visit_and_extract_relevant_info, AgentSearchResult, AnalysisDocument, SearchInput,
-    SearchResult,
+    parallel_visit_and_extract_relevant_info, AgentSearchInput, AgentSearchResult,
+    AnalysisDocument, SearchResult,
 };
 use crate::llm::{CompletionBuilder, LLMError, Model, Provider};
 use crate::prompts::{build_dependency_tree_system_prompt, Prompt};
@@ -99,7 +99,7 @@ async fn process_level(
 }
 
 pub async fn parallel_tree_agent_search(
-    search_input: &SearchInput,
+    search_input: &AgentSearchInput,
     searx_host: &str,
     searx_port: &str,
 ) -> Result<AgentSearchResult, ParallelTreeAgentSearchError> {

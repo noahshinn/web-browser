@@ -1,6 +1,6 @@
 use crate::agent_search::{
-    parallel_visit_and_extract_relevant_info, AgentSearchResult, AggregationPassError, SearchInput,
-    VisitAndExtractRelevantInfoError,
+    parallel_visit_and_extract_relevant_info, AgentSearchInput, AgentSearchResult,
+    AggregationPassError, VisitAndExtractRelevantInfoError,
 };
 use crate::search;
 use crate::search::{search, SearchError};
@@ -20,7 +20,7 @@ pub enum ParallelAgentSearchError {
 }
 
 pub async fn parallel_agent_search(
-    search_input: &SearchInput,
+    search_input: &AgentSearchInput,
     searx_host: &str,
     searx_port: &str,
 ) -> Result<AgentSearchResult, ParallelAgentSearchError> {

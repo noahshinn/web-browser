@@ -33,7 +33,7 @@ pub use sequential::{sequential_agent_search, SequentialAgentSearchError};
 use crate::query::{synthesize_queries, QuerySynthesisError};
 
 #[derive(Deserialize, Debug, Clone, FromForm)]
-pub struct SearchInput {
+pub struct AgentSearchInput {
     pub query: String,
     pub current_search_result: Option<SearchResult>,
     #[serde(default)]
@@ -44,7 +44,7 @@ pub struct SearchInput {
     pub max_results_to_visit: Option<usize>,
 }
 
-impl Default for SearchInput {
+impl Default for AgentSearchInput {
     fn default() -> Self {
         Self {
             query: String::new(),
@@ -145,7 +145,7 @@ pub enum AgentSearchError {
 }
 
 pub async fn agent_search_with_query(
-    search_input: &SearchInput,
+    search_input: &AgentSearchInput,
     searx_host: &str,
     searx_port: &str,
 ) -> Result<AgentSearchResult, AgentSingleSearchError> {
@@ -173,7 +173,7 @@ pub async fn agent_search_with_query(
 }
 
 pub async fn agent_search(
-    search_input: &SearchInput,
+    search_input: &AgentSearchInput,
     searx_host: &str,
     searx_port: &str,
 ) -> Result<AgentSearchResult, AgentSearchError> {
@@ -186,7 +186,7 @@ pub async fn agent_search(
     match query_strategy {
         QueryStrategy::Verbatim => {
             let query = synthesized_queries.queries.first().unwrap();
-            let modified_input = SearchInput {
+            let modified_input = AgentSearchInput {
                 query: query.clone(),
                 current_search_result: current_search_result.clone(),
                 search_strategy: Some(search_strategy.clone()),
@@ -202,7 +202,7 @@ pub async fn agent_search(
         }
         QueryStrategy::SingleSynthesize => {
             let query = synthesized_queries.queries.first().unwrap();
-            let modified_input = SearchInput {
+            let modified_input = AgentSearchInput {
                 query: query.clone(),
                 current_search_result: current_search_result.clone(),
                 search_strategy: Some(search_strategy.clone()),
@@ -226,7 +226,7 @@ pub async fn agent_search(
                 let searx_port = searx_port.to_string();
 
                 tokio::spawn(async move {
-                    let modified_input = SearchInput {
+                    let modified_input = AgentSearchInput {
                         query: query,
                         current_search_result: current_search_result,
                         search_strategy: Some(search_strategy),
@@ -289,7 +289,7 @@ pub async fn agent_search(
         QueryStrategy::SequentialSynthesize => {
             let mut cur_result: Option<AgentSearchResult> = None;
             for query in synthesized_queries.queries {
-                let modified_input = SearchInput {
+                let modified_input = AgentSearchInput {
                     query: query.clone(),
                     current_search_result: current_search_result.clone(),
                     search_strategy: Some(search_strategy.clone()),

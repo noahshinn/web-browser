@@ -1,4 +1,4 @@
-use crate::agent_search::{agent_search, AgentSearchResult, SearchInput};
+use crate::agent_search::{agent_search, AgentSearchInput, AgentSearchResult};
 use crate::server::ServerState;
 use rocket::http::Status;
 use rocket::post;
@@ -15,7 +15,7 @@ pub struct AgentSearchErrorResponse {
 #[post("/v1/agent_search", data = "<search_input>")]
 pub async fn handle_agent_search(
     state: &State<ServerState>,
-    search_input: Json<SearchInput>,
+    search_input: Json<AgentSearchInput>,
 ) -> Result<Json<AgentSearchResult>, (Status, Json<AgentSearchErrorResponse>)> {
     match agent_search(&search_input, &state.searx_host, &state.searx_port).await {
         Ok(result) => Ok(Json(result)),

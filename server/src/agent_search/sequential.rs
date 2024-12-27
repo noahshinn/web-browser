@@ -1,6 +1,6 @@
 use crate::agent_search::{
-    check_sufficient_information, visit_and_extract_relevant_info, AgentSearchResult,
-    AnalysisDocument, SearchInput, SufficientInformationCheckError,
+    check_sufficient_information, visit_and_extract_relevant_info, AgentSearchInput,
+    AgentSearchResult, AnalysisDocument, SufficientInformationCheckError,
     VisitAndExtractRelevantInfoError,
 };
 use crate::search;
@@ -18,7 +18,7 @@ pub enum SequentialAgentSearchError {
 }
 
 pub async fn sequential_agent_search(
-    search_input: &SearchInput,
+    search_input: &AgentSearchInput,
     searx_host: &str,
     searx_port: &str,
 ) -> Result<AgentSearchResult, SequentialAgentSearchError> {
