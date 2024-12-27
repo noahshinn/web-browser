@@ -4,8 +4,27 @@ use crate::prompts::{
     GENERATE_SINGLE_QUERY_SYSTEM_PROMPT,
 };
 use crate::utils::{parse_json_response, ParseJsonError};
+use rocket::form::FromFormField;
 use serde::Deserialize;
 use thiserror::Error;
+
+#[derive(Debug, Clone, Deserialize, FromFormField)]
+pub enum QueryStrategy {
+    #[serde(rename = "verbatim")]
+    Verbatim,
+    #[serde(rename = "single_synthesize")]
+    SingleSynthesize,
+    #[serde(rename = "parallel_synthesize")]
+    ParallelSynthesize,
+    #[serde(rename = "sequential_synthesize")]
+    SequentialSynthesize,
+}
+
+impl Default for QueryStrategy {
+    fn default() -> Self {
+        QueryStrategy::Verbatim
+    }
+}
 
 #[derive(Error, Debug)]
 pub enum QuerySynthesisError {
@@ -104,14 +123,14 @@ async fn generate_sequential_queries(
 
 pub async fn synthesize_queries(
     original_query: &str,
-    strategy: &crate::agent_search::QueryStrategy,
+    strategy: &QueryStrategy,
 ) -> Result<MultiQueryResponse, QuerySynthesisError> {
     match strategy {
-        crate::agent_search::QueryStrategy::Verbatim => Ok(MultiQueryResponse {
+        QueryStrategy::Verbatim => Ok(MultiQueryResponse {
             reasoning: "".to_string(),
             queries: vec![original_query.to_string()],
         }),
-        crate::agent_search::QueryStrategy::SingleSynthesize => {
+        QueryStrategy::SingleSynthesize => {
             let query = match generate_single_query(original_query).await {
                 Ok(query) => query,
                 Err(e) => return Err(e),
@@ -121,14 +140,14 @@ pub async fn synthesize_queries(
                 queries: vec![query.query],
             })
         }
-        crate::agent_search::QueryStrategy::ParallelSynthesize => {
+        QueryStrategy::ParallelSynthesize => {
             let queries = match generate_parallel_queries(original_query).await {
                 Ok(queries) => queries,
                 Err(e) => return Err(e),
             };
             Ok(queries)
         }
-        crate::agent_search::QueryStrategy::SequentialSynthesize => {
+        QueryStrategy::SequentialSynthesize => {
             let queries = match generate_sequential_queries(original_query).await {
                 Ok(queries) => queries,
                 Err(e) => return Err(e),

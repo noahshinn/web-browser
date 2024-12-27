@@ -9,6 +9,7 @@ pub mod query;
 pub mod search;
 pub mod server;
 pub mod utils;
+pub mod webpage_parse;
 
 #[rocket::main]
 async fn main() {
