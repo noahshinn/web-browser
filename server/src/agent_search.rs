@@ -46,6 +46,10 @@ pub struct AgentSearchInput {
     pub result_format: Option<ResultFormat>,
     #[serde(default)]
     pub custom_result_format_description: Option<String>,
+    #[serde(default)]
+    pub whitelisted_base_urls: Option<Vec<String>>,
+    #[serde(default)]
+    pub blacklisted_base_urls: Option<Vec<String>>,
 }
 
 impl Default for AgentSearchInput {
@@ -58,7 +62,19 @@ impl Default for AgentSearchInput {
             max_results_to_visit: Some(10),
             result_format: Some(ResultFormat::default()),
             custom_result_format_description: None,
+            whitelisted_base_urls: None,
+            blacklisted_base_urls: None,
         }
+    }
+}
+
+impl AgentSearchInput {
+    pub fn build_google_search_query(&self) -> String {
+        crate::search::build_google_search_query(
+            &self.query,
+            self.whitelisted_base_urls.as_ref(),
+            self.blacklisted_base_urls.as_ref(),
+        )
     }
 }
 
@@ -186,6 +202,8 @@ pub async fn agent_search(
                 custom_result_format_description: search_input
                     .custom_result_format_description
                     .clone(),
+                whitelisted_base_urls: search_input.whitelisted_base_urls.clone(),
+                blacklisted_base_urls: search_input.blacklisted_base_urls.clone(),
             };
             let pre_formatted_result =
                 match agent_search_with_query(&modified_input, searx_host, searx_port).await {
@@ -213,6 +231,8 @@ pub async fn agent_search(
                     custom_result_format_description: search_input
                         .custom_result_format_description
                         .clone(),
+                    whitelisted_base_urls: search_input.whitelisted_base_urls.clone(),
+                    blacklisted_base_urls: search_input.blacklisted_base_urls.clone(),
                 };
                 let iter_result =
                     match agent_search_with_query(&modified_input, searx_host, searx_port).await {
@@ -258,6 +278,8 @@ pub async fn agent_search(
                 let searx_port = searx_port.to_string();
                 let custom_result_format_description =
                     search_input.custom_result_format_description.clone();
+                let whitelisted_base_urls = search_input.whitelisted_base_urls.clone();
+                let blacklisted_base_urls = search_input.blacklisted_base_urls.clone();
                 tokio::spawn(async move {
                     let modified_input = AgentSearchInput {
                         query,
@@ -267,6 +289,8 @@ pub async fn agent_search(
                         max_results_to_visit,
                         result_format,
                         custom_result_format_description,
+                        whitelisted_base_urls,
+                        blacklisted_base_urls,
                     };
                     agent_search_with_query(&modified_input, &searx_host, &searx_port).await
                 })

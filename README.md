@@ -76,6 +76,24 @@ The following query strategies are supported:
 
 You can specify the number of results to visit with the `max_results_to_visit` field in the JSON body (default is 10).
 
+### Whitelisting and blacklisting base URLs
+
+You can specify the whitelisted and blacklisted base URLs with the `whitelisted_base_urls` and `blacklisted_base_urls` fields in the JSON body:
+
+- `whitelisted_base_urls`: Only the results from the whitelisted base URLs will be visited.
+- `blacklisted_base_urls`: The results from the blacklisted base URLs will not be visited.
+
+For example, to whitelist `github.com`, you can run the following command:
+
+```bash
+curl -X POST http://localhost:8095/v1/agent_search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "what is sequence parallelism",
+    "whitelisted_base_urls": ["github.com"]
+  }'
+```
+
 ### Result format
 
 You can specify the result format with the `result_format` field in the JSON body. The following formats are supported:

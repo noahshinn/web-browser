@@ -105,8 +105,10 @@ pub async fn parallel_tree_agent_search(
 ) -> Result<PreFormattedAgentSearchResult, ParallelTreeAgentSearchError> {
     let search_results = match search(
         &search::SearchInput {
-            query: search_input.query.clone(),
+            query: search_input.build_google_search_query(),
             max_results_to_visit: search_input.max_results_to_visit,
+            whitelisted_base_urls: search_input.whitelisted_base_urls.clone(),
+            blacklisted_base_urls: search_input.blacklisted_base_urls.clone(),
         },
         searx_host,
         searx_port,

@@ -8,6 +8,10 @@ pub struct SearchInput {
     pub query: String,
     #[serde(default)]
     pub max_results_to_visit: Option<usize>,
+    #[serde(default)]
+    pub whitelisted_base_urls: Option<Vec<String>>,
+    #[serde(default)]
+    pub blacklisted_base_urls: Option<Vec<String>>,
 }
 
 impl Default for SearchInput {
@@ -15,7 +19,19 @@ impl Default for SearchInput {
         Self {
             query: String::new(),
             max_results_to_visit: Some(10),
+            whitelisted_base_urls: None,
+            blacklisted_base_urls: None,
         }
+    }
+}
+
+impl SearchInput {
+    pub fn build_google_search_query(&self) -> String {
+        build_google_search_query(
+            &self.query,
+            self.whitelisted_base_urls.as_ref(),
+            self.blacklisted_base_urls.as_ref(),
+        )
     }
 }
 
@@ -129,8 +145,9 @@ pub async fn search(
         .max_results_to_visit
         .unwrap_or(MAX_RESULTS_TO_VISIT);
     let num_pages = (max_results + SEARX_RESULTS_PER_PAGE - 1) / SEARX_RESULTS_PER_PAGE;
+    let query = search_input.build_google_search_query();
     let futures: Vec<_> = (1..=num_pages)
-        .map(|pageno| single_page_search(&search_input.query, searx_host, searx_port, pageno))
+        .map(|pageno| single_page_search(&query, searx_host, searx_port, pageno))
         .collect();
     let results = join_all(futures).await;
     let mut all_results = Vec::new();
@@ -148,4 +165,28 @@ pub async fn search(
         }
     }
     Ok(all_results)
+}
+
+pub fn build_google_search_query(
+    query: &str,
+    whitelisted_base_urls: Option<&Vec<String>>,
+    blacklisted_base_urls: Option<&Vec<String>>,
+) -> String {
+    let mut parts = vec![query.to_string()];
+    if let Some(whitelist) = whitelisted_base_urls {
+        let site_query = whitelist
+            .iter()
+            .map(|url| format!("site:{}", url))
+            .collect::<Vec<_>>()
+            .join(" OR ");
+        if !site_query.is_empty() {
+            parts.push(format!("({})", site_query));
+        }
+    }
+    if let Some(blacklist) = blacklisted_base_urls {
+        for url in blacklist {
+            parts.push(format!("-site:{}", url));
+        }
+    }
+    parts.join(" ")
 }
