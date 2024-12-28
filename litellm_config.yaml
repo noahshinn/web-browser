@@ -1,0 +1,7 @@
+model_list:
+  - model_name: "*" 
+    litellm_params:
+      model: "*"
+server_settings:
+  environment: production
+  master_key: os.environ/LLM_PROXY_API_KEY
