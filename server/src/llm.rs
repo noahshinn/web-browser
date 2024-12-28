@@ -6,8 +6,8 @@ use thiserror::Error;
 
 const DEFAULT_LLM_PROXY_HOST: &str = "localhost";
 const DEFAULT_LLM_PROXY_PORT: &str = "8097";
-const DEFAULT_MODEL_NAME: &str = "gpt-4o";
-const DEFAULT_PROVIDER: &str = "openai";
+const DEFAULT_MODEL_NAME: &str = "claude-3-5-sonnet-20241022";
+const DEFAULT_PROVIDER: &str = "anthropic";
 
 fn llm_proxy_url() -> String {
     let host =
@@ -70,8 +70,15 @@ pub struct LLMResponseUsage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LLMResponseError {
     pub message: String,
+    #[serde(default)]
     pub code: String,
+    #[serde(default)]
     pub r#type: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct LiteLLMError {
+    error: LLMResponseError,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -142,25 +149,33 @@ impl CompletionBuilder {
             Ok(response) => response,
             Err(e) => return Err(LLMError::RequestError(e)),
         };
-        if !response.status().is_success() {
-            let status = response.status();
-            let error = match response.json::<LLMResponseError>().await {
-                Ok(error) => error,
-                Err(e) => return Err(LLMError::RequestError(e)),
-            };
-            return Err(LLMError::Other(format!(
-                "HTTP error status {}: {}",
-                status, error.message
-            )));
+
+        match response.status() {
+            reqwest::StatusCode::OK => {
+                let response_json = match response.json::<LLMResponse>().await {
+                    Ok(response_json) => response_json,
+                    Err(e) => return Err(LLMError::RequestError(e)),
+                };
+                if response_json.choices.is_empty() {
+                    return Err(LLMError::EmptyResponse);
+                }
+                Ok(response_json.choices[0].message.content.clone())
+            }
+            status => {
+                let response_text = match response.text().await {
+                    Ok(text) => text,
+                    Err(e) => return Err(LLMError::RequestError(e)),
+                };
+                let error_message = match serde_json::from_str::<LiteLLMError>(&response_text) {
+                    Ok(lite_error) => lite_error.error.message,
+                    Err(_) => response_text,
+                };
+                Err(LLMError::Other(format!(
+                    "HTTP error status {}: {}",
+                    status, error_message
+                )))
+            }
         }
-        let response_json = match response.json::<LLMResponse>().await {
-            Ok(response_json) => response_json,
-            Err(e) => return Err(LLMError::RequestError(e)),
-        };
-        if response_json.choices.is_empty() {
-            return Err(LLMError::EmptyResponse);
-        }
-        Ok(response_json.choices[0].message.content.clone())
     }
 }
 
