@@ -26,10 +26,7 @@ async fn run() -> Result<(), server::ServerError> {
         .ok()
         .and_then(|p| p.parse().ok())
         .unwrap_or(8095);
-
     let config = rocket::Config::figment().merge(("port", port));
-
-    let rocket = create_server()?.configure(config);
-
+    let rocket = create_server().configure(config);
     run_server(rocket).await
 }

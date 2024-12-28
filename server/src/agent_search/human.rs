@@ -1,5 +1,4 @@
 use serde::Deserialize;
-use std::fmt::Display;
 use thiserror::Error;
 
 use crate::agent_search::{
@@ -11,15 +10,15 @@ use crate::llm::default_completion;
 use crate::prompts::{build_select_next_result_system_prompt, Prompt};
 use crate::search;
 use crate::search::{search, SearchError};
+use crate::utils::ParseJsonError;
 use crate::utils::{display_search_results_with_indices, parse_json_response};
 
 #[derive(Error, Debug)]
-pub struct SelectNextResultError(LLMError);
-
-impl Display for SelectNextResultError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Failed to select next result: {}", self.0)
-    }
+pub enum SelectNextResultError {
+    #[error("LLM error: {0}")]
+    LLMError(#[from] LLMError),
+    #[error("Parse error: {0}")]
+    ParseError(#[from] ParseJsonError),
 }
 
 #[derive(Error, Debug)]
@@ -49,12 +48,12 @@ async fn select_next_result(
     let prompt = Prompt::new(build_select_next_result_system_prompt(), user_prompt);
     let completion = match default_completion(&prompt).await {
         Ok(completion) => completion,
-        Err(e) => return Err(SelectNextResultError(e)),
+        Err(e) => return Err(SelectNextResultError::LLMError(e)),
     };
 
     let decision: NextResultToVisit = match parse_json_response(&completion) {
         Ok(decision) => decision,
-        Err(e) => return Err(SelectNextResultError(LLMError::ParseError(e.to_string()))),
+        Err(e) => return Err(SelectNextResultError::ParseError(e)),
     };
     Ok(decision.index)
 }

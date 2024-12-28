@@ -9,6 +9,7 @@ use crate::result_format::{
     format_result, AnalysisDocument, ResultFormat, ResultFormatError, ResultFormatResponse,
 };
 use crate::search::SearchResult;
+use crate::utils::ParseJsonError;
 use crate::utils::{display_search_results_with_indices, parse_json_response};
 use crate::webpage_parse::{visit_and_parse_webpage, WebpageParseError};
 use rocket::{FromForm, FromFormField};
@@ -398,12 +399,11 @@ struct SufficientInformationCheck {
 }
 
 #[derive(Error, Debug)]
-pub struct SufficientInformationCheckError(LLMError);
-
-impl Display for SufficientInformationCheckError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Sufficient information check failed: {}", self.0)
-    }
+pub enum SufficientInformationCheckError {
+    #[error("LLM error: {0}")]
+    LLMError(#[from] LLMError),
+    #[error("Parse error: {0}")]
+    ParseError(#[from] ParseJsonError),
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -422,15 +422,11 @@ async fn check_sufficient_information(
     let prompt = Prompt::new(build_sufficient_information_check_prompt(), user_prompt);
     let completion = match default_completion(&prompt).await {
         Ok(completion) => completion,
-        Err(e) => return Err(SufficientInformationCheckError(e)),
+        Err(e) => return Err(SufficientInformationCheckError::LLMError(e)),
     };
     let decision: SufficientInformationCheck = match parse_json_response(&completion) {
         Ok(decision) => decision,
-        Err(e) => {
-            return Err(SufficientInformationCheckError(LLMError::ParseError(
-                e.to_string(),
-            )))
-        }
+        Err(e) => return Err(SufficientInformationCheckError::ParseError(e)),
     };
     Ok(decision)
 }
