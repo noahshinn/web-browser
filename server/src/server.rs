@@ -1,4 +1,5 @@
 use crate::handlers::agent_search::handle_agent_search;
+use crate::handlers::scrape_site::handle_scrape_site;
 use crate::handlers::search::handle_search;
 use rocket::routes;
 
@@ -35,7 +36,10 @@ pub fn create_server() -> Result<rocket::Rocket<rocket::Build>, ServerError> {
             searx_host: searx_host,
             searx_port: searx_port,
         })
-        .mount("/", routes![handle_search, handle_agent_search,]))
+        .mount(
+            "/",
+            routes![handle_search, handle_agent_search, handle_scrape_site],
+        ))
 }
 
 pub async fn run_server(rocket: rocket::Rocket<rocket::Build>) -> Result<(), ServerError> {

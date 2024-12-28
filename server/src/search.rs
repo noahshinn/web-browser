@@ -118,10 +118,14 @@ async fn single_page_search(
             response.status()
         )));
     }
-    let searx_response = response
+    let searx_response = match response
         .json::<SearxResponse>()
         .await
-        .map_err(SearchError::RequestError)?;
+        .map_err(SearchError::RequestError)
+    {
+        Ok(searx_response) => searx_response,
+        Err(e) => return Err(e),
+    };
     Ok(searx_response
         .results
         .into_iter()

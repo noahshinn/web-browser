@@ -128,6 +128,71 @@ curl -X POST http://localhost:8095/v1/agent_search \
   }'
 ```
 
+## Other features
+
+### Scraping a website
+
+This feature allows you to scrape all of the pages in a site (by base URL) and format the result as cleaned HTML or markdown. Traditional web scraping tools perform this operation by visiting the starting page and following links to other pages. This tool finds all of the pages that have a common base URL, even if they are "orphan" pages without a link to them from any page.
+
+```bash
+curl -X POST http://localhost:8095/v1/scrape_site \
+  -H "Content-Type: application/json" \
+  -d '{
+    "base_url": <base_url>,
+  }'
+```
+
+For example, to scrape Olukai's help center, `support.olukai.com`, you can run the following command:
+
+```bash
+curl -X POST http://localhost:8095/v1/scrape_site \
+  -H "Content-Type: application/json" \
+  -d '{
+    "base_url": "support.olukai.com",
+  }'
+```
+
+You can also specify the maximum number of pages to visit with the `max_num_pages_to_visit` field in the JSON body (default is 2000).
+
+```bash
+curl -X POST http://localhost:8095/v1/scrape_site \
+  -H "Content-Type: application/json" \
+  -d '{
+    "base_url": "support.olukai.com",
+    "max_num_pages_to_visit": 500
+  }'
+```
+
+You can also specify the result format with the `result_format` field in the JSON body. The following formats are supported:
+
+- `html`: (default) Formats the result as cleaned HTML.
+- `md`: Formats the result as markdown. Uses a language model to transform the cleaned HTML into markdown.
+
+For example, to scrape Olukai's help center and format the result as markdown, you can run the following command:
+
+```bash
+curl -X POST http://localhost:8095/v1/scrape_site \
+  -H "Content-Type: application/json" \
+  -d '{
+    "base_url": "support.olukai.com",
+    "max_num_pages_to_visit": 5,
+    "result_format": "md"
+  }'
+```
+
+You can pass a max concurrency to the scrape site endpoint with the `max_concurrency` field in the JSON body (default is 10).
+
+```bash
+curl -X POST http://localhost:8095/v1/scrape_site \
+  -H "Content-Type: application/json" \
+  -d '{
+    "base_url": "support.olukai.com",
+    "max_num_pages_to_visit": 5,
+    "result_format": "md",
+    "max_concurrency": 5
+  }'
+```
+
 ## Development
 
 You can run the server with the following command:

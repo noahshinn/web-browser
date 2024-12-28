@@ -251,3 +251,12 @@ pub const RESULT_FORMAT_CUSTOM_SYSTEM_PROMPT: &str = r#"# Task
 You will be given a search query and a list of search results.
 Your task is to write a response according to the custom format description.
 "#;
+
+pub const SCRAPE_SITE_RESULT_FORMAT_MD_SYSTEM_PROMPT: &str = r#"# Task
+You will be given an html webpage.
+Your task is to write a markdown version of the webpage.
+Don't leave out any information from the original webpage.
+
+## Format
+Your response will be directly used as the markdown version of the webpage, so don't include any prefix or suffix.
+"#;
