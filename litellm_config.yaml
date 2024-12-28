@@ -8,6 +8,9 @@ model_list:
       api_key: "${ANTHROPIC_API_KEY}"
       api_version: "2023-06-01"
       tpm: 400000
+litellm_settings:
+  num_retries: 0
+  fallbacks: ["gpt-4o"]
 server_settings:
   environment: production
   master_key: os.environ/LLM_PROXY_API_KEY
