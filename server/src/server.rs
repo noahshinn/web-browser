@@ -1,6 +1,6 @@
-use crate::handlers::agent_search::handle_agent_search;
-use crate::handlers::scrape_site::handle_scrape_site;
-use crate::handlers::search::handle_search;
+use crate::handlers::v1::agent_search::handle_agent_search;
+use crate::handlers::v1::scrape_site::handle_scrape_site;
+use crate::handlers::v1::search::handle_search;
 use rocket::routes;
 
 #[derive(Debug)]
@@ -37,7 +37,7 @@ pub fn create_server() -> Result<rocket::Rocket<rocket::Build>, ServerError> {
             searx_port: searx_port,
         })
         .mount(
-            "/",
+            "/v1",
             routes![handle_search, handle_agent_search, handle_scrape_site],
         ))
 }

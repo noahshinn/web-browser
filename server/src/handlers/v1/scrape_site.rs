@@ -17,7 +17,7 @@ pub struct ScrapeSiteErrorResponse {
     pub error_type: String,
 }
 
-#[post("/v1/scrape_site", data = "<scrape_site_input>")]
+#[post("/scrape_site", data = "<scrape_site_input>")]
 pub async fn handle_scrape_site(
     state: &State<ServerState>,
     scrape_site_input: Json<ScrapeSiteInput>,

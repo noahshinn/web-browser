@@ -12,7 +12,7 @@ pub struct AgentSearchErrorResponse {
     pub error_type: String,
 }
 
-#[post("/v1/agent_search", data = "<search_input>")]
+#[post("/agent_search", data = "<search_input>")]
 pub async fn handle_agent_search(
     state: &State<ServerState>,
     search_input: Json<AgentSearchInput>,

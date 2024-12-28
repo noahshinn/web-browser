@@ -12,7 +12,7 @@ pub struct SearchErrorResponse {
     pub error_type: String,
 }
 
-#[post("/v1/search", data = "<search_input>")]
+#[post("/search", data = "<search_input>")]
 pub async fn handle_search(
     state: &State<ServerState>,
     search_input: Json<SearchInput>,
