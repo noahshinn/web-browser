@@ -1,5 +1,5 @@
+use crate::llm::default_completion;
 use crate::llm::LLMError;
-use crate::llm::{CompletionBuilder, Model, Provider};
 use crate::prompts::{
     build_analyze_result_system_prompt, build_sufficient_information_check_prompt, Prompt,
     AGGREGATE_WEB_SEARCH_FINDINGS_PROMPT, WEB_SEARCH_USE_SAME_WEB_SEARCH_FINDINGS_DOCUMENT,
@@ -382,14 +382,7 @@ async fn visit_and_extract_relevant_info(
         query, result.title, result.url, parsed_webpage.content, current_analysis
     );
     let prompt = Prompt::new(build_analyze_result_system_prompt(), user_prompt);
-    let completion = match CompletionBuilder::new()
-        .model(Model::Claude35Sonnet)
-        .provider(Provider::Anthropic)
-        .messages(prompt.build_messages())
-        .temperature(0.0)
-        .build()
-        .await
-    {
+    let completion = match default_completion(&prompt).await {
         Ok(completion) => completion,
         Err(e) => return Err(VisitAndExtractRelevantInfoError::LLMError(e)),
     };
@@ -427,14 +420,7 @@ async fn check_sufficient_information(
 ) -> Result<SufficientInformationCheck, SufficientInformationCheckError> {
     let user_prompt = format!("# Query:\n{}\n\n# Current analysis:\n{}\n\n# Visited results:\n{}\n\n# Unvisited results:\n{}", query, current_analysis, display_search_results_with_indices(visited_results), display_search_results_with_indices(unvisited_results));
     let prompt = Prompt::new(build_sufficient_information_check_prompt(), user_prompt);
-    let completion = match CompletionBuilder::new()
-        .model(Model::Claude35Sonnet)
-        .provider(Provider::Anthropic)
-        .messages(prompt.build_messages())
-        .temperature(0.0)
-        .build()
-        .await
-    {
+    let completion = match default_completion(&prompt).await {
         Ok(completion) => completion,
         Err(e) => return Err(SufficientInformationCheckError(e)),
     };
@@ -519,14 +505,7 @@ async fn aggregate_results(
         AGGREGATE_WEB_SEARCH_FINDINGS_PROMPT.to_string(),
         user_prompt,
     );
-    let completion = match CompletionBuilder::new()
-        .model(Model::Claude35Sonnet)
-        .provider(Provider::Anthropic)
-        .messages(prompt.build_messages())
-        .temperature(0.0)
-        .build()
-        .await
-    {
+    let completion = match default_completion(&prompt).await {
         Ok(completion) => completion,
         Err(e) => return Err(AggregationPassError(e)),
     };

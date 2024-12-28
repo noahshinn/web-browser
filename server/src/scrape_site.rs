@@ -1,4 +1,4 @@
-use crate::llm::{CompletionBuilder, LLMError, Model, Provider};
+use crate::llm::{default_completion, LLMError};
 use crate::prompts::{Prompt, SCRAPE_SITE_RESULT_FORMAT_MD_SYSTEM_PROMPT};
 use crate::search::{search, SearchError, SearchInput, SearchResult};
 use crate::webpage_parse::{visit_and_parse_webpage, ParsedWebpage, WebpageParseError};
@@ -145,14 +145,7 @@ async fn format_result_md(
         instruction: SCRAPE_SITE_RESULT_FORMAT_MD_SYSTEM_PROMPT.to_string(),
         context: format!("# Site\n{}", result.parsed_webpage.content.clone()),
     };
-    let completion = match CompletionBuilder::new()
-        .model(Model::Claude35Sonnet)
-        .provider(Provider::Anthropic)
-        .messages(prompt.build_messages())
-        .temperature(0.0)
-        .build()
-        .await
-    {
+    let completion = match default_completion(&prompt).await {
         Ok(completion) => completion,
         Err(e) => return Err(ScrapeSiteFormatError::LLMError(e)),
     };

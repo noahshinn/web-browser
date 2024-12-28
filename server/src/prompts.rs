@@ -1,5 +1,6 @@
 use crate::llm::{Message, Role};
 
+#[derive(Debug, Clone)]
 pub struct Prompt {
     pub instruction: String,
     pub context: String,

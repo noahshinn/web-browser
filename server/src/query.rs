@@ -1,4 +1,4 @@
-use crate::llm::{CompletionBuilder, LLMError, Model, Provider};
+use crate::llm::{default_completion, LLMError};
 use crate::prompts::{
     Prompt, GENERATE_PARALLEL_QUERIES_SYSTEM_PROMPT, GENERATE_SEQUENTIAL_QUERIES_SYSTEM_PROMPT,
     GENERATE_SINGLE_QUERY_SYSTEM_PROMPT,
@@ -51,17 +51,9 @@ async fn generate_single_query(original_query: &str) -> Result<QueryResponse, Qu
         GENERATE_SINGLE_QUERY_SYSTEM_PROMPT.to_string(),
         original_query.to_string(),
     );
-    let completion = match CompletionBuilder::new()
-        .model(Model::Claude35Sonnet)
-        .provider(Provider::Anthropic)
-        .messages(prompt.build_messages())
-        .temperature(0.0)
-        .build()
-        .await
-        .map_err(QuerySynthesisError::LLMError)
-    {
+    let completion = match default_completion(&prompt).await {
         Ok(completion) => completion,
-        Err(e) => return Err(e),
+        Err(e) => return Err(QuerySynthesisError::LLMError(e)),
     };
     let query: QueryResponse = match parse_json_response(&completion) {
         Ok(query) => query,
@@ -77,14 +69,7 @@ async fn generate_parallel_queries(
         GENERATE_PARALLEL_QUERIES_SYSTEM_PROMPT.to_string(),
         original_query.to_string(),
     );
-    let completion = match CompletionBuilder::new()
-        .model(Model::Claude35Sonnet)
-        .provider(Provider::Anthropic)
-        .messages(prompt.build_messages())
-        .temperature(0.0)
-        .build()
-        .await
-    {
+    let completion = match default_completion(&prompt).await {
         Ok(completion) => completion,
         Err(e) => return Err(QuerySynthesisError::LLMError(e)),
     };
@@ -102,17 +87,9 @@ async fn generate_sequential_queries(
         GENERATE_SEQUENTIAL_QUERIES_SYSTEM_PROMPT.to_string(),
         original_query.to_string(),
     );
-    let completion = match CompletionBuilder::new()
-        .model(Model::Claude35Sonnet)
-        .provider(Provider::Anthropic)
-        .messages(prompt.build_messages())
-        .temperature(0.0)
-        .build()
-        .await
-        .map_err(QuerySynthesisError::LLMError)
-    {
+    let completion = match default_completion(&prompt).await {
         Ok(completion) => completion,
-        Err(e) => return Err(e),
+        Err(e) => return Err(QuerySynthesisError::LLMError(e)),
     };
     let queries: MultiQueryResponse = match parse_json_response(&completion) {
         Ok(queries) => queries,

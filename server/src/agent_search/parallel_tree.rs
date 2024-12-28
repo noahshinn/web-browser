@@ -3,7 +3,7 @@ use crate::agent_search::{
     parallel_visit_and_extract_relevant_info, AgentSearchInput, AnalysisDocument,
     PreFormattedAgentSearchResult, SearchResult,
 };
-use crate::llm::{CompletionBuilder, LLMError, Model, Provider};
+use crate::llm::{default_completion, LLMError};
 use crate::prompts::{build_dependency_tree_system_prompt, Prompt};
 use crate::search;
 use crate::search::{search, SearchError};
@@ -61,14 +61,10 @@ async fn construct_dependency_tree(
         ),
     );
 
-    let completion = CompletionBuilder::new()
-        .model(Model::Claude35Sonnet)
-        .provider(Provider::Anthropic)
-        .messages(prompt.build_messages())
-        .temperature(0.0)
-        .build()
-        .await
-        .map_err(TreeConstructionError)?;
+    let completion = match default_completion(&prompt).await {
+        Ok(completion) => completion,
+        Err(e) => return Err(TreeConstructionError(e)),
+    };
 
     serde_json::from_str(&completion).map_err(|e| {
         TreeConstructionError(LLMError::ParseError(format!(

@@ -7,7 +7,7 @@ use crate::agent_search::{
     AnalysisDocument, LLMError, PreFormattedAgentSearchResult, SearchResult,
     SufficientInformationCheckError, VisitAndExtractRelevantInfoError,
 };
-use crate::llm::{CompletionBuilder, Model, Provider};
+use crate::llm::default_completion;
 use crate::prompts::{build_select_next_result_system_prompt, Prompt};
 use crate::search;
 use crate::search::{search, SearchError};
@@ -47,14 +47,7 @@ async fn select_next_result(
 ) -> Result<usize, SelectNextResultError> {
     let user_prompt = format!("# Query:\n{}\n\n# Current analysis:\n{}\n\n# Visited results:\n{}\n\n# Unvisited results:\n{}", query, current_analysis, display_search_results_with_indices(visited_results), display_search_results_with_indices(unvisited_results));
     let prompt = Prompt::new(build_select_next_result_system_prompt(), user_prompt);
-    let completion = match CompletionBuilder::new()
-        .model(Model::Claude35Sonnet)
-        .provider(Provider::Anthropic)
-        .messages(prompt.build_messages())
-        .temperature(0.0)
-        .build()
-        .await
-    {
+    let completion = match default_completion(&prompt).await {
         Ok(completion) => completion,
         Err(e) => return Err(SelectNextResultError(e)),
     };

@@ -1,4 +1,4 @@
-use crate::llm::{CompletionBuilder, LLMError, Model, Provider};
+use crate::llm::{default_completion, LLMError};
 use crate::prompts::{
     Prompt, RESULT_FORMAT_ANSWER_SYSTEM_PROMPT, RESULT_FORMAT_CUSTOM_SYSTEM_PROMPT,
     RESULT_FORMAT_FAQ_SYSTEM_PROMPT, RESULT_FORMAT_NEWS_ARTICLE_SYSTEM_PROMPT,
@@ -109,14 +109,7 @@ pub async fn format_result_answer(
                 .join("\n\n")
         ),
     };
-    let completion = match CompletionBuilder::new()
-        .model(Model::Claude35Sonnet)
-        .provider(Provider::Anthropic)
-        .messages(prompt.build_messages())
-        .temperature(0.0)
-        .build()
-        .await
-    {
+    let completion = match default_completion(&prompt).await {
         Ok(completion) => completion,
         Err(e) => return Err(ResultFormatError::LLMError(e)),
     };
@@ -140,14 +133,7 @@ pub async fn format_result_research_summary(
                 .join("\n\n")
         ),
     };
-    let completion = match CompletionBuilder::new()
-        .model(Model::Claude35Sonnet)
-        .provider(Provider::Anthropic)
-        .messages(prompt.build_messages())
-        .temperature(0.0)
-        .build()
-        .await
-    {
+    let completion = match default_completion(&prompt).await {
         Ok(completion) => completion,
         Err(e) => return Err(ResultFormatError::LLMError(e)),
     };
@@ -171,14 +157,7 @@ pub async fn format_result_faq(
                 .join("\n\n")
         ),
     };
-    let completion = match CompletionBuilder::new()
-        .model(Model::Claude35Sonnet)
-        .provider(Provider::Anthropic)
-        .messages(prompt.build_messages())
-        .temperature(0.0)
-        .build()
-        .await
-    {
+    let completion = match default_completion(&prompt).await {
         Ok(completion) => completion,
         Err(e) => return Err(ResultFormatError::LLMError(e)),
     };
@@ -203,14 +182,7 @@ pub async fn format_result_news_article(
                 .join("\n\n")
         ),
     };
-    let completion = match CompletionBuilder::new()
-        .model(Model::Claude35Sonnet)
-        .provider(Provider::Anthropic)
-        .messages(prompt.build_messages())
-        .temperature(0.0)
-        .build()
-        .await
-    {
+    let completion = match default_completion(&prompt).await {
         Ok(completion) => completion,
         Err(e) => return Err(ResultFormatError::LLMError(e)),
     };
@@ -240,14 +212,7 @@ pub async fn format_result_webpage(
                 .join("\n\n")
         ),
     };
-    let completion = match CompletionBuilder::new()
-        .model(Model::Claude35Sonnet)
-        .provider(Provider::Anthropic)
-        .messages(prompt.build_messages())
-        .temperature(0.0)
-        .build()
-        .await
-    {
+    let completion = match default_completion(&prompt).await {
         Ok(completion) => completion,
         Err(e) => return Err(ResultFormatError::LLMError(e)),
     };
@@ -278,14 +243,7 @@ pub async fn format_result_custom(
                 .join("\n\n")
         ),
     };
-    let completion = match CompletionBuilder::new()
-        .model(Model::Claude35Sonnet)
-        .provider(Provider::Anthropic)
-        .messages(prompt.build_messages())
-        .temperature(0.0)
-        .build()
-        .await
-    {
+    let completion = match default_completion(&prompt).await {
         Ok(completion) => completion,
         Err(e) => return Err(ResultFormatError::LLMError(e)),
     };

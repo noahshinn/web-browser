@@ -1,3 +1,4 @@
+use crate::prompts::Prompt;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use thiserror::Error;
@@ -214,4 +215,13 @@ pub enum LLMError {
     EmptyResponse,
     #[error("Other error: {0}")]
     Other(String),
+}
+
+pub async fn default_completion(prompt: &Prompt) -> Result<String, LLMError> {
+    let builder = CompletionBuilder::new()
+        .model(Model::Claude35Sonnet)
+        .provider(Provider::Anthropic)
+        .messages(prompt.clone().build_messages())
+        .temperature(0.0);
+    builder.build().await
 }
