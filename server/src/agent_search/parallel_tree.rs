@@ -8,7 +8,6 @@ use crate::prompts::{build_dependency_tree_system_prompt, Prompt};
 use crate::search;
 use crate::search::{search, SearchError};
 use serde::Deserialize;
-use std::fmt::Display;
 use thiserror::Error;
 use tokio::task::JoinError;
 
@@ -29,12 +28,11 @@ pub enum ParallelTreeAgentSearchError {
 }
 
 #[derive(Error, Debug)]
-pub struct TreeConstructionError(LLMError);
-
-impl Display for TreeConstructionError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Failed to construct tree: {}", self.0)
-    }
+pub enum TreeConstructionError {
+    #[error("LLM error: {0}")]
+    LLMError(#[from] LLMError),
+    #[error("Parse error: {0}")]
+    ParseError(String),
 }
 
 #[derive(Deserialize, Debug)]
@@ -63,14 +61,11 @@ async fn construct_dependency_tree(
 
     let completion = match default_completion(&prompt).await {
         Ok(completion) => completion,
-        Err(e) => return Err(TreeConstructionError(e)),
+        Err(e) => return Err(TreeConstructionError::LLMError(e)),
     };
 
     serde_json::from_str(&completion).map_err(|e| {
-        TreeConstructionError(LLMError::ParseError(format!(
-            "Failed to parse dependency tree: {}",
-            e
-        )))
+        TreeConstructionError::ParseError(format!("Failed to parse dependency tree: {}", e))
     })
 }
 
