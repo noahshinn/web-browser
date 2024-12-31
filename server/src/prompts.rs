@@ -14,15 +14,15 @@ impl Prompt {
         }
     }
 
-    pub fn build_messages(self) -> Vec<Message> {
+    pub fn build_messages(&self) -> Vec<Message> {
         vec![
             Message {
                 role: Role::System,
-                content: self.instruction,
+                content: self.instruction.clone(),
             },
             Message {
                 role: Role::User,
-                content: self.context,
+                content: self.context.clone(),
             },
         ]
     }

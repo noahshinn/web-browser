@@ -91,10 +91,10 @@ impl fmt::Display for Model {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct CompletionBuilder {
+pub struct CompletionBuilder<'a> {
     model: Option<Model>,
     provider: Option<Provider>,
-    messages: Vec<Message>,
+    messages: &'a [Message],
     temperature: Option<f64>,
     max_completion_tokens: Option<i32>,
     server_endpoint: Option<String>,
@@ -102,9 +102,18 @@ pub struct CompletionBuilder {
     custom_model: Option<String>,
 }
 
-impl CompletionBuilder {
+impl<'a> CompletionBuilder<'a> {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            model: None,
+            provider: None,
+            messages: &[],
+            temperature: None,
+            max_completion_tokens: None,
+            server_endpoint: None,
+            custom_server_endpoint: None,
+            custom_model: None,
+        }
     }
 
     pub fn model(mut self, model: Model) -> Self {
@@ -117,7 +126,7 @@ impl CompletionBuilder {
         self
     }
 
-    pub fn messages(mut self, messages: Vec<Message>) -> Self {
+    pub fn messages(mut self, messages: &'a [Message]) -> Self {
         self.messages = messages;
         self
     }
@@ -218,10 +227,11 @@ pub enum LLMError {
 }
 
 pub async fn default_completion(prompt: &Prompt) -> Result<String, LLMError> {
+    let messages = prompt.build_messages();
     let builder = CompletionBuilder::new()
         .model(Model::Claude35Sonnet)
         .provider(Provider::Anthropic)
-        .messages(prompt.clone().build_messages())
+        .messages(&messages)
         .temperature(0.0);
     builder.build().await
 }
