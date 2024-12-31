@@ -1,3 +1,43 @@
+x-base-llm-proxy-environment: &base-llm-proxy-environment
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+  OPENAI_API_KEY: ${OPENAI_API_KEY}
+  GEMINI_API_KEY: ${GEMINI_API_KEY}
+  LITELLM_MASTER_KEY: ${LLM_PROXY_API_KEY:-sk-1234}
+
+x-base-llm-proxy-service: &base-llm-proxy-service
+  image: ghcr.io/berriai/litellm:main-latest
+  networks:
+    - searxng
+  ports:
+    - "127.0.0.1:${LLM_PROXY_PORT:-8097}:8097"
+  environment:
+    <<: *base-llm-proxy-environment
+  volumes:
+    - ./litellm/litellm_config.yaml:/app/config.yaml
+  command: --config /app/config.yaml --port ${LLM_PROXY_PORT:-8097}
+  healthcheck:
+    test:
+      [
+        "CMD",
+        "curl",
+        "-f",
+        "-H",
+        "Authorization: Bearer ${LLM_PROXY_API_KEY:-sk-1234}",
+        "http://localhost:${LLM_PROXY_PORT:-8097}/health",
+      ]
+    interval: 30s
+    timeout: 10s
+    retries: 3
+  cap_drop:
+    - ALL
+  cap_add:
+    - NET_BIND_SERVICE
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "1m"
+      max-file: "1"
+
 services:
   caddy:
     container_name: caddy
@@ -63,6 +103,7 @@ services:
       - CHOWN
       - SETGID
       - SETUID
+      - DAC_OVERRIDE
     logging:
       driver: "json-file"
       options:
@@ -70,37 +111,75 @@ services:
         max-file: "1"
 
   llm-proxy:
+    <<: *base-llm-proxy-service
     container_name: llm-proxy
-    image: ghcr.io/berriai/litellm:main-latest
+    profiles: ["default"]
+
+  llm-proxy-with-logging:
+    <<: *base-llm-proxy-service
+    container_name: llm-proxy-with-logging
+    environment:
+      <<: *base-llm-proxy-environment
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-UNSET_IGNORE_WARNING}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-UNSET_IGNORE_WARNING}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-localhost:-http://localhost:8098}
+    volumes:
+      - ./litellm/litellm_config_w_logging.yaml:/app/config.yaml
+    profiles: ["llm-logging"]
+
+  langfuse-server:
+    container_name: langfuse-server
+    image: langfuse/langfuse:2
+    profiles: ["llm-logging"]
     networks:
       - searxng
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
     ports:
-      - "127.0.0.1:${LLM_PROXY_PORT:-8097}:8097"
+      - "127.0.0.1:${LANGFUSE_PORT:-8098}:3000"
     environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - LITELLM_MASTER_KEY=${LLM_PROXY_API_KEY:-sk-1234}
-    volumes:
-      - ./litellm_config.yaml:/app/config.yaml
-    command: --config /app/config.yaml --port ${LLM_PROXY_PORT:-8097}
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "curl",
-          "-f",
-          "-H",
-          "Authorization: Bearer ${LLM_PROXY_API_KEY:-sk-1234}",
-          "http://localhost:${LLM_PROXY_PORT:-8097}/health",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      - DATABASE_URL=postgresql://postgres:postgres@langfuse-db:5432/postgres
+      - NEXTAUTH_SECRET=mysecret
+      - SALT=mysalt
+      - ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000
+      - NEXTAUTH_URL=http://localhost:${LANGFUSE_PORT:-8098}
+      - TELEMETRY_ENABLED=false
     cap_drop:
       - ALL
     cap_add:
       - NET_BIND_SERVICE
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "1"
+
+  langfuse-db:
+    container_name: langfuse-db
+    image: postgres:15-alpine
+    profiles: ["llm-logging"]
+    networks:
+      - searxng
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    volumes:
+      - langfuse_data:/var/lib/postgresql/data
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
     logging:
       driver: "json-file"
       options:
@@ -114,3 +193,5 @@ volumes:
   caddy-data:
   caddy-config:
   valkey-data2:
+  langfuse_data:
+    driver: local

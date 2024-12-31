@@ -1,0 +1,19 @@
+model_list:
+  - model_name: "*" 
+    litellm_params:
+      model: "*"
+  - model_name: anthropic-claude
+    litellm_params:
+      model: "anthropic/*"
+      api_key: "${ANTHROPIC_API_KEY}"
+      api_version: "2023-06-01"
+      tpm: 400000
+
+litellm_settings:
+  num_retries: 0
+  fallbacks: [{"claude-*": ["gpt-4o"]}]
+  redact_user_api_key_info: true
+
+server_settings:
+  environment: production
+  master_key: os.environ/LLM_PROXY_API_KEY
