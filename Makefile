@@ -18,12 +18,12 @@ check-llm-keys:
 				echo "Error: $$key environment variable is required when ENABLE_LLM_LOGGING is set" && \
 				echo "Please set it with: export $$key=your_key" && \
 				echo "If you do not have a key yet, do the following:" && \
-				echo "  1. Run \`docker compose up --build langfuse-server\` to start the Langfuse server"; \
-				echo "  2. Navigate to $$(or $(LANGFUSE_HOST),http://localhost:8098)/auth/sign-in in your browser"; \
-				echo "  3. Create a new API key (you may need to create an org and project if you have not already)"; \
-				echo "  4. Set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY as environment variables"; \
-				echo "  5. Stop the Langfuse container (the existing data will be persisted)"; \
-				echo "  6. Complete"; \
+				echo "  1. Run \`docker compose up --build langfuse-server\` to start the Langfuse server" && \
+				echo "  2. Navigate to $${LANGFUSE_HOST:-http://localhost:8098}/auth/sign-in in your browser" && \
+				echo "  3. Create a new API key (you may need to create an org and project if you have not already)" && \
+				echo "  4. Set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY as environment variables" && \
+				echo "  5. Stop the Langfuse container (the existing data will be persisted)" && \
+				echo "  6. Complete" && \
 				exit 1; \
 			fi \
 		done \
