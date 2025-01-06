@@ -192,9 +192,13 @@ pub enum LLMError {
 }
 
 pub async fn default_completion(prompt: &Prompt) -> Result<String, LLMError> {
+    let model =
+        std::env::var("DEFAULT_LLM_MODEL").unwrap_or_else(|_| DEFAULT_MODEL_NAME.to_string());
+    let provider =
+        std::env::var("DEFAULT_LLM_PROVIDER").unwrap_or_else(|_| DEFAULT_PROVIDER.to_string());
     let builder = CompletionBuilder::new()
-        .model(DEFAULT_MODEL_NAME.to_string())
-        .provider(DEFAULT_PROVIDER.to_string())
+        .model(model)
+        .provider(provider)
         .messages(prompt.clone().build_messages())
         .temperature(0.0);
     builder.build().await

@@ -238,6 +238,13 @@ export ANTHROPIC_API_KEY=...
 export WEB_SEARCH_SERVER_PORT=8095
 ```
 
+By default, LLM calls are routed to `claude-3-5-sonnet-20241022` from Anthropic. You can change the model and provider by setting the following environment variables before starting the server:
+
+```bash
+export DEFAULT_LLM_MODEL=...
+export DEFAULT_LLM_PROVIDER=...
+```
+
 Then, run the server:
 
 ```bash
