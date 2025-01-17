@@ -94,7 +94,7 @@ async fn single_page_search(
 ) -> Result<Vec<SearchResult>, SearchError> {
     let searx_url = format!("http://{}:{}/search", searx_host, searx_port);
     let client = match reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(60))
         .build()
     {
         Ok(client) => client,
