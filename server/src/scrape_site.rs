@@ -1,4 +1,4 @@
-use crate::llm::{default_completion, LLMError};
+use crate::llm::{CompletionBuilder, LLMError};
 use crate::prompts::{Prompt, SCRAPE_SITE_RESULT_FORMAT_MD_SYSTEM_PROMPT};
 use crate::search::{search, SearchError, SearchInput, SearchResult};
 use crate::webpage_parse::{visit_and_parse_webpage, ParsedWebpage, WebpageParseError};
@@ -62,7 +62,7 @@ pub async fn scrape_site(
         .max_num_pages_to_visit
         .unwrap_or(MAX_NUM_PAGES_TO_VISIT);
     let search_input = SearchInput {
-        query: scrape_input.base_url.clone(),
+        query: "".to_string(),
         max_results_to_visit: Some(num_pages),
         whitelisted_base_urls: Some(vec![scrape_input.base_url.clone()]),
         blacklisted_base_urls: None,
@@ -145,7 +145,12 @@ async fn format_result_md(
         instruction: SCRAPE_SITE_RESULT_FORMAT_MD_SYSTEM_PROMPT.to_string(),
         context: format!("# Site\n{}", result.parsed_webpage.content.clone()),
     };
-    let completion = match default_completion(&prompt).await {
+    let builder = CompletionBuilder::new()
+        .model("gpt-4o".to_string())
+        .provider("openai".to_string())
+        .messages(prompt.clone().build_messages())
+        .temperature(0.0);
+    let completion = match builder.build().await {
         Ok(completion) => completion,
         Err(e) => return Err(ScrapeSiteFormatError::LLMError(e)),
     };

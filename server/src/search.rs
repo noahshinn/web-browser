@@ -183,9 +183,7 @@ pub fn build_google_search_query(
             .map(|url| format!("site:{}", url))
             .collect::<Vec<_>>()
             .join(" OR ");
-        if !site_query.is_empty() {
-            parts.push(format!("({})", site_query));
-        }
+        parts.push(site_query);
     }
     if let Some(blacklist) = blacklisted_base_urls {
         for url in blacklist {
