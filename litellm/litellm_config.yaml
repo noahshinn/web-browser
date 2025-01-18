@@ -7,7 +7,7 @@ model_list:
       model: "anthropic/*"
       api_key: "${ANTHROPIC_API_KEY}"
       api_version: "2023-06-01"
-      tpm: 400000
+      tpm: 800000
 
 litellm_settings:
   num_retries: 0
