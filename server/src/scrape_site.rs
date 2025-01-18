@@ -1,6 +1,7 @@
-use crate::llm::{CompletionBuilder, LLMError};
+use crate::llm::{default_completion, CompletionBuilder, LLMError};
 use crate::prompts::{Prompt, SCRAPE_SITE_RESULT_FORMAT_MD_SYSTEM_PROMPT};
 use crate::search::{search, SearchError, SearchInput, SearchResult};
+use crate::utils::{parse_json_response, ParseJsonError};
 use crate::webpage_parse::{visit_and_parse_webpage, ParsedWebpage, WebpageParseError};
 use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -117,6 +118,8 @@ pub async fn scrape_site(
 pub enum ScrapeSiteFormatError {
     #[error("Failed to format result with llm: {0}")]
     LLMError(#[from] LLMError),
+    #[error("Failed to parse json: {0}")]
+    ParseError(#[from] ParseJsonError),
 }
 
 async fn format_result(
@@ -138,6 +141,12 @@ async fn format_result_html(
     })
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct SearchResultObject {
+    title: String,
+    content: String,
+}
+
 async fn format_result_md(
     result: &ParsedSearchResult,
 ) -> Result<ScrapeSiteResult, ScrapeSiteFormatError> {
@@ -154,8 +163,18 @@ async fn format_result_md(
         Ok(completion) => completion,
         Err(e) => return Err(ScrapeSiteFormatError::LLMError(e)),
     };
+
+    let search_result_object: SearchResultObject = match parse_json_response(&completion) {
+        Ok(search_result_object) => search_result_object,
+        Err(e) => return Err(ScrapeSiteFormatError::ParseError(e)),
+    };
+    let search_result = SearchResult {
+        title: search_result_object.title,
+        url: result.search_result.url.clone(),
+        content: search_result_object.content.clone(),
+    };
     Ok(ScrapeSiteResult {
-        search_result: result.search_result.clone(),
-        formatted_content: completion,
+        search_result,
+        formatted_content: search_result_object.content,
     })
 }

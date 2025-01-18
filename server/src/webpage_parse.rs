@@ -33,17 +33,30 @@ pub struct ParsedWebpage {
     pub content: String,
 }
 
+const MAX_RETRIES: u32 = 3;
+
 pub async fn visit_and_parse_webpage(url: &str) -> Result<ParsedWebpage, WebpageParseError> {
-    let response = match reqwest::get(url).await {
-        Ok(response) => response,
+    let mut attempts = 0;
+    let response = loop {
+        match reqwest::get(url).await {
+            Ok(response) => break response,
+            Err(e) => {
+                attempts += 1;
+                if attempts >= MAX_RETRIES {
+                    return Err(WebpageParseError::FetchError(e));
+                }
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            }
+        }
+    };
+    let webpage_text = match response.text().await {
+        Ok(text) => text,
         Err(e) => return Err(WebpageParseError::FetchError(e)),
     };
-    let webpage_text = response
-        .text()
-        .await
-        .map_err(|e| WebpageParseError::FetchError(e))?;
-
-    let dom_text = dom_parse_webpage(&webpage_text)?;
+    let dom_text = match dom_parse_webpage(&webpage_text) {
+        Ok(text) => text,
+        Err(e) => return Err(WebpageParseError::DomParseError(e)),
+    };
     let trimmed_text = dom_text.content.trim();
     Ok(ParsedWebpage {
         original_content: dom_text.original_content,

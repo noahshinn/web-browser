@@ -259,5 +259,12 @@ Your task is to write a markdown version of the webpage.
 Don't leave out any information from the original webpage.
 
 ## Format
-Your response will be directly used as the markdown version of the webpage, so don't include any prefix or suffix.
+Write a JSON object in a markdown code block in the following format:
+
+```json
+{
+    "title": "the title of the webpage",
+    "content": "the body of the webpage in markdown format"
+}
+```
 "#;

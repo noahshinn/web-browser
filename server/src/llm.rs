@@ -141,7 +141,7 @@ impl CompletionBuilder {
                 "custom_llm_provider": self.provider.unwrap_or(DEFAULT_PROVIDER.to_string()),
                 "messages": messages,
                 "temperature": self.temperature.unwrap_or(0.0),
-                "max_tokens": self.max_completion_tokens.unwrap_or(1000)
+                "max_tokens": self.max_completion_tokens.unwrap_or(8192)
             }))
             .send()
             .await
