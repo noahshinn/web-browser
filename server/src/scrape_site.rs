@@ -1,4 +1,4 @@
-use crate::llm::{default_completion, CompletionBuilder, LLMError};
+use crate::llm::{CompletionBuilder, LLMError};
 use crate::prompts::{Prompt, SCRAPE_SITE_RESULT_FORMAT_MD_SYSTEM_PROMPT};
 use crate::search::{search, SearchError, SearchInput, SearchResult};
 use crate::utils::{parse_json_response, ParseJsonError};
