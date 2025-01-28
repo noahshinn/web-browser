@@ -109,6 +109,9 @@ pub async fn scrape_site(
     for formatted_result in formatted_results {
         match formatted_result {
             Ok(formatted_result) => {
+                if formatted_result.search_result.content.is_empty() {
+                    continue;
+                }
                 all_results.push(formatted_result);
             }
             Err(e) => {
