@@ -75,15 +75,20 @@ pub async fn scrape_site(
     let futures = json_results
         .into_iter()
         .map(|result| async {
-            let parsed_webpage = visit_and_parse_webpage(&result.url).await;
-            ParsedSearchResult {
-                search_result: result,
-                parsed_webpage: parsed_webpage.unwrap(),
+            match visit_and_parse_webpage(&result.url).await {
+                Ok(parsed_webpage) => Ok(ParsedSearchResult {
+                    search_result: result,
+                    parsed_webpage,
+                }),
+                Err(e) => Err(ScrapeSiteError::WebpageParseError(e)),
             }
         })
         .collect::<Vec<_>>();
     let results = futures::future::join_all(futures).await;
-
+    let results = results
+        .into_iter()
+        .filter_map(|r| r.ok())
+        .collect::<Vec<_>>();
     let max_concurrency = scrape_input
         .max_concurrency
         .unwrap_or(DEFAULT_MAX_CONCURRENCY);
@@ -95,7 +100,7 @@ pub async fn scrape_site(
         .unwrap_or(&default_result_format);
 
     let formatted_results = stream::iter(results)
-        .map(|result| format_result(result, result_format))
+        .map(|result| format_result(result.search_result, result.parsed_webpage, &result_format))
         .buffer_unordered(max_concurrency)
         .collect::<Vec<_>>()
         .await;
@@ -120,24 +125,28 @@ pub enum ScrapeSiteFormatError {
     LLMError(#[from] LLMError),
     #[error("Failed to parse json: {0}")]
     ParseError(#[from] ParseJsonError),
+    #[error("Failed to parse webpage: {0}")]
+    WebpageParseError(#[from] WebpageParseError),
 }
 
 async fn format_result(
-    result: ParsedSearchResult,
+    search_result: SearchResult,
+    parsed_webpage: ParsedWebpage,
     result_format: &ScrapeSiteResultFormat,
 ) -> Result<ScrapeSiteResult, ScrapeSiteFormatError> {
     match result_format {
-        ScrapeSiteResultFormat::Html => format_result_html(&result).await,
-        ScrapeSiteResultFormat::Md => format_result_md(&result).await,
+        ScrapeSiteResultFormat::Html => format_result_html(search_result, parsed_webpage).await,
+        ScrapeSiteResultFormat::Md => format_result_md(search_result, parsed_webpage).await,
     }
 }
 
 async fn format_result_html(
-    result: &ParsedSearchResult,
+    search_result: SearchResult,
+    parsed_webpage: ParsedWebpage,
 ) -> Result<ScrapeSiteResult, ScrapeSiteFormatError> {
     Ok(ScrapeSiteResult {
-        search_result: result.search_result.clone(),
-        formatted_content: result.parsed_webpage.content.clone(),
+        search_result,
+        formatted_content: parsed_webpage.content,
     })
 }
 
@@ -148,11 +157,12 @@ struct SearchResultObject {
 }
 
 async fn format_result_md(
-    result: &ParsedSearchResult,
+    search_result: SearchResult,
+    parsed_webpage: ParsedWebpage,
 ) -> Result<ScrapeSiteResult, ScrapeSiteFormatError> {
     let prompt = Prompt {
         instruction: SCRAPE_SITE_RESULT_FORMAT_MD_SYSTEM_PROMPT.to_string(),
-        context: format!("# Site\n{}", result.parsed_webpage.content.clone()),
+        context: format!("# Site\n{}", parsed_webpage.content.clone()),
     };
     let builder = CompletionBuilder::new()
         .model("gpt-4o".to_string())
@@ -170,9 +180,11 @@ async fn format_result_md(
     };
     let search_result = SearchResult {
         title: search_result_object.title,
-        url: result.search_result.url.clone(),
+        url: search_result.url.clone(),
         content: search_result_object.content.clone(),
     };
+    // REMOVE
+    println!("Search result: {}", search_result.content);
     Ok(ScrapeSiteResult {
         search_result,
         formatted_content: search_result_object.content,

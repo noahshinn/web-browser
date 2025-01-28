@@ -28,6 +28,7 @@ pub enum SemanticParseError {
     ParseError(String),
 }
 
+#[derive(Clone)]
 pub struct ParsedWebpage {
     pub original_content: String,
     pub content: String,
@@ -38,7 +39,27 @@ const MAX_RETRIES: u32 = 3;
 pub async fn visit_and_parse_webpage(url: &str) -> Result<ParsedWebpage, WebpageParseError> {
     let mut attempts = 0;
     let response = loop {
-        match reqwest::get(url).await {
+        let client = reqwest::Client::builder()
+            .gzip(true)
+            .build()
+            .map_err(WebpageParseError::FetchError)?;
+        match client.get(url)
+            .header("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
+            .header("Accept-Language", "en-US,en;q=0.9")
+            .header("priority", "u=0, i")
+            .header("sec-ch-ua", "\"Chromium\";v=\"128\", \"Not;A=Brand\";v=\"24\", \"Google Chrome\";v=\"128\"")
+            .header("sec-ch-ua-mobile", "?0")
+            .header("sec-ch-ua-platform", "\"macOS\"")
+            .header("sec-fetch-dest", "document")
+            .header("sec-fetch-mode", "navigate")
+            .header("sec-fetch-site", "none")
+            .header("sec-fetch-user", "?1")
+            .header("upgrade-insecure-requests", "1")
+            .header("user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36")
+            .header("Accept-Encoding", "gzip")
+            .send()
+            .await
+        {
             Ok(response) => break response,
             Err(e) => {
                 attempts += 1;

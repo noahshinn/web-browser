@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
-reqwest = { version = "0.12.9", features = ["json"] }
+reqwest = { version = "0.12.9", features = ["json", "gzip"] }
 serde = { version = "1.0.216", features = ["derive"] }
 serde_json = "1.0"
 rocket = { version = "0.5.1", features = ["json"] }
