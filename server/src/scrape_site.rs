@@ -134,9 +134,27 @@ async fn format_result(
     parsed_webpage: ParsedWebpage,
     result_format: &ScrapeSiteResultFormat,
 ) -> Result<ScrapeSiteResult, ScrapeSiteFormatError> {
-    match result_format {
-        ScrapeSiteResultFormat::Html => format_result_html(search_result, parsed_webpage).await,
-        ScrapeSiteResultFormat::Md => format_result_md(search_result, parsed_webpage).await,
+    let mut attempts = 0;
+    let max_attempts = 3;
+    loop {
+        let result = match result_format {
+            ScrapeSiteResultFormat::Html => {
+                format_result_html(search_result.clone(), parsed_webpage.clone()).await
+            }
+            ScrapeSiteResultFormat::Md => {
+                format_result_md(search_result.clone(), parsed_webpage.clone()).await
+            }
+        };
+
+        match result {
+            Ok(formatted_result) => return Ok(formatted_result),
+            Err(e) => {
+                attempts += 1;
+                if attempts >= max_attempts {
+                    return Err(e);
+                }
+            }
+        }
     }
 }
 
@@ -183,8 +201,6 @@ async fn format_result_md(
         url: search_result.url.clone(),
         content: search_result_object.content.clone(),
     };
-    // REMOVE
-    println!("Search result: {}", search_result.content);
     Ok(ScrapeSiteResult {
         search_result,
         formatted_content: search_result_object.content,
