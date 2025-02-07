@@ -5,6 +5,7 @@ use crate::utils::{parse_json_response, ParseJsonError};
 use crate::webpage_parse::{visit_and_parse_webpage, ParsedWebpage, WebpageParseError};
 use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use thiserror::Error;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -13,6 +14,7 @@ pub struct ScrapeSiteInput {
     pub max_num_pages_to_visit: Option<usize>,
     pub result_format: Option<ScrapeSiteResultFormat>,
     pub max_concurrency: Option<usize>,
+    pub explicit_urls_to_visit: Option<Vec<String>>,
 }
 
 const DEFAULT_MAX_CONCURRENCY: usize = 10;
@@ -68,10 +70,23 @@ pub async fn scrape_site(
         whitelisted_base_urls: Some(vec![scrape_input.base_url.clone()]),
         blacklisted_base_urls: None,
     };
-    let json_results = match search(&search_input, searx_host, searx_port).await {
+    let mut json_results = match search(&search_input, searx_host, searx_port).await {
         Ok(results) => results,
         Err(e) => return Err(ScrapeSiteError::SearchError(e)),
     };
+    let mut visited_urls = HashSet::new();
+    for result in json_results.iter() {
+        visited_urls.insert(result.url.clone());
+    }
+    if let Some(explicit_urls_to_visit) = scrape_input.explicit_urls_to_visit.clone() {
+        for url in explicit_urls_to_visit {
+            json_results.push(SearchResult {
+                url,
+                title: "[Title in article body]".to_string(),
+                content: "[Content in article body]".to_string(),
+            });
+        }
+    }
     let futures = json_results
         .into_iter()
         .map(|result| async {
