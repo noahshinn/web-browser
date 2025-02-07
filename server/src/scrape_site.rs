@@ -80,11 +80,14 @@ pub async fn scrape_site(
     }
     if let Some(explicit_urls_to_visit) = scrape_input.explicit_urls_to_visit.clone() {
         for url in explicit_urls_to_visit {
-            json_results.push(SearchResult {
-                url,
-                title: "[Title in article body]".to_string(),
-                content: "[Content in article body]".to_string(),
-            });
+            if !visited_urls.contains(&url) {
+                json_results.push(SearchResult {
+                    url: url.clone(),
+                    title: "[Title in article body]".to_string(),
+                    content: "[Content in article body]".to_string(),
+                });
+                visited_urls.insert(url);
+            }
         }
     }
     let futures = json_results
