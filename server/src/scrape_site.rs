@@ -7,6 +7,7 @@ use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use thiserror::Error;
+use url::Url;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ScrapeSiteInput {
@@ -47,6 +48,8 @@ pub enum ScrapeSiteError {
     FormatError(#[from] ScrapeSiteFormatError),
     #[error("Failed to parse webpage: {0}")]
     WebpageParseError(#[from] WebpageParseError),
+    #[error("Failed to parse URL: {0}")]
+    UrlParseError(#[from] url::ParseError),
 }
 
 const MAX_NUM_PAGES_TO_VISIT: usize = 2000;
@@ -76,17 +79,35 @@ pub async fn scrape_site(
     };
     let mut visited_urls = HashSet::new();
     for result in json_results.iter() {
-        visited_urls.insert(result.url.clone());
+        match Url::parse(&result.url) {
+            Ok(parsed_url) => {
+                visited_urls.insert(parsed_url.to_string());
+            }
+            Err(_) => {
+                visited_urls.insert(result.url.clone());
+            }
+        }
     }
     if let Some(explicit_urls_to_visit) = scrape_input.explicit_urls_to_visit.clone() {
         for url in explicit_urls_to_visit {
-            if !visited_urls.contains(&url) {
+            let should_add = match Url::parse(&url) {
+                Ok(parsed_url) => !visited_urls.contains(&parsed_url.to_string()),
+                Err(_) => !visited_urls.contains(&url),
+            };
+            if should_add {
                 json_results.push(SearchResult {
                     url: url.clone(),
                     title: "[Title in article body]".to_string(),
                     content: "[Content in article body]".to_string(),
                 });
-                visited_urls.insert(url);
+                match Url::parse(&url) {
+                    Ok(parsed_url) => {
+                        visited_urls.insert(parsed_url.to_string());
+                    }
+                    Err(_) => {
+                        visited_urls.insert(url);
+                    }
+                }
             }
         }
     }

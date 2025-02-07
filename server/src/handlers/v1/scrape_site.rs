@@ -32,6 +32,7 @@ pub async fn handle_scrape_site(
                     ScrapeSiteError::SearchError(_) => "search_error".to_string(),
                     ScrapeSiteError::FormatError(_) => "format_error".to_string(),
                     ScrapeSiteError::WebpageParseError(_) => "webpage_parse_error".to_string(),
+                    ScrapeSiteError::UrlParseError(_) => "url_parse_error".to_string(),
                 },
             }),
         )),
